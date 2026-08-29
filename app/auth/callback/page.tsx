@@ -11,25 +11,24 @@ export default function AuthCallback() {
     const supabase = createClient();
 
     async function run() {
-      const url = new URL(window.location.href);
-      const code = url.searchParams.get("code");
-      const hash = window.location.hash;
+      const hash = window.location.hash.startsWith("#")
+        ? window.location.hash.substring(1)
+        : window.location.hash;
+      const params = new URLSearchParams(hash);
+      const access_token = params.get("access_token");
+      const refresh_token = params.get("refresh_token");
 
-      setDebug(`code param: ${code ?? "none"} | hash: ${hash || "none"} | full url: ${window.location.href}`);
-
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (access_token && refresh_token) {
+        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
         if (error) {
-          setDebug((d) => d + ` | exchange error: ${error.message}`);
+          setDebug("setSession error: " + error.message);
           return;
         }
         router.replace("/dashboard");
         return;
       }
 
-      const { data: { session }, error: sessErr } = await supabase.auth.getSession();
-      setDebug((d) => d + ` | getSession result: ${session ? "has session" : "no session"} ${sessErr ? sessErr.message : ""}`);
-      if (session) router.replace("/dashboard");
+      setDebug("no access_token found in hash: " + hash.slice(0, 100));
     }
     run();
   }, [router]);
