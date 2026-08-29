@@ -20,6 +20,12 @@ export default function UploadPage() {
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (userErr || !user) { setStatus("Auth error: " + (userErr?.message ?? "no user")); return; }
 
+      setStatus("Ensuring adviser record exists...");
+      const { error: advErr } = await supabase
+        .from("advisers")
+        .upsert({ id: user.id, email: user.email, full_name: user.email }, { onConflict: "id" });
+      if (advErr) { setStatus("Adviser upsert error: " + advErr.message); return; }
+
       setStatus("Creating client record...");
       const { data: client, error: clientErr } = await supabase
         .from("clients")
