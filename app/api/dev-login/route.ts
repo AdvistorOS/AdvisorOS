@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabaseAdmin.auth.admin.generateLink({
     type: "magiclink",
     email,
+    options: { redirectTo: "https://advisor-os-fawn.vercel.app/auth/callback" },
   });
   if (error) return Response.json({ error: error.message }, { status: 400 });
   return Response.json({ link: data.properties?.action_link });
