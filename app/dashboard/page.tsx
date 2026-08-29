@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { Plus, Clock3, User, UserPlus } from "lucide-react";
+import { Plus, Clock3, User, UserPlus, Settings } from "lucide-react";
 
 export default async function Dashboard() {
   const supabase = await createClient();
@@ -28,6 +28,10 @@ export default async function Dashboard() {
           <p className="text-ink-muted text-xs mt-0.5">Signed in as {user?.email}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/dashboard/settings"
+            className="text-ink-muted p-2.5 rounded-md hover:bg-border transition">
+            <Settings size={16} />
+          </Link>
           <Link href="/dashboard/team"
             className="text-ink-muted text-sm px-3 py-2.5 rounded-md hover:bg-border transition flex items-center gap-1.5">
             <UserPlus size={16} />

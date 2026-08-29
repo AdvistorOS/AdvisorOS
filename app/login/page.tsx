@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -47,6 +48,9 @@ export default function LoginPage() {
           </button>
           {error && <p className="text-warn text-xs">{error}</p>}
         </form>
+        <Link href="/forgot-password" className="text-xs text-ink-muted hover:text-brass transition block mt-4 text-center">
+          Forgot password?
+        </Link>
       </div>
     </div>
   );
