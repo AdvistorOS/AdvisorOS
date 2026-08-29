@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
 
 export default async function MeetingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,7 +14,10 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="border-b border-border px-8 py-5">
+      <header className="border-b border-border px-8 py-5 flex items-center gap-4">
+        <Link href="/dashboard" className="text-ink-muted hover:text-brass transition text-sm">
+          ← Back
+        </Link>
         <span className="font-display text-xl text-ink">AdvisorOS</span>
       </header>
 
