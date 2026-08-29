@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { ArrowLeft, FileText, ShieldAlert, ListChecks } from "lucide-react";
+import { DeleteButton } from "./DeleteButton";
 
 export default async function MeetingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,9 +25,12 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
       </header>
 
       <main className="max-w-2xl mx-auto px-6 py-12 space-y-8">
-        <div>
-          <p className="font-mono text-xs text-ink-muted uppercase tracking-widest">Client</p>
-          <h1 className="font-display text-3xl text-ink mt-1">{meeting?.clients?.full_name}</h1>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="font-mono text-xs text-ink-muted uppercase tracking-widest">Client</p>
+            <h1 className="font-display text-3xl text-ink mt-1">{meeting?.clients?.full_name}</h1>
+          </div>
+          <DeleteButton meetingId={id} />
         </div>
 
         <section className="bg-surface border border-border rounded-xl p-7 card-shadow">
