@@ -5,12 +5,18 @@ import { createClient } from "@/lib/supabase/client";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
   const supabase = createClient();
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    setErrorMsg("");
     const { error } = await supabase.auth.signInWithOtp({ email });
-    if (!error) setSent(true);
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setSent(true);
+    }
   }
 
   return (
@@ -31,6 +37,7 @@ export default function LoginPage() {
             <button type="submit" className="bg-ink text-paper text-sm rounded-sm px-3 py-2 w-full hover:opacity-90 transition">
               Send login link
             </button>
+            {errorMsg && <p className="text-sm text-warn">{errorMsg}</p>}
           </form>
         )}
       </div>
