@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { Plus, Clock3, User } from "lucide-react";
+import { Plus, Clock3, User, UserPlus } from "lucide-react";
 
 export default async function Dashboard() {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   const { data: meetings } = await supabase
     .from("meetings")
     .select("*, clients(id, full_name), internal_notes(payload)")
@@ -21,12 +23,22 @@ export default async function Dashboard() {
   return (
     <div className="min-h-screen bg-paper">
       <header className="border-b border-border bg-surface/60 backdrop-blur-sm sticky top-0 z-10 px-8 py-5 flex items-center justify-between">
-        <span className="font-display text-xl text-ink tracking-tight">AdvisorOS</span>
-        <Link href="/dashboard/upload"
-          className="bg-ink text-paper text-sm px-4 py-2.5 rounded-md hover:opacity-90 transition flex items-center gap-2 card-shadow">
-          <Plus size={16} strokeWidth={2.5} />
-          New meeting
-        </Link>
+        <div>
+          <span className="font-display text-xl text-ink tracking-tight">AdvisorOS</span>
+          <p className="text-ink-muted text-xs mt-0.5">Signed in as {user?.email}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/team"
+            className="text-ink-muted text-sm px-3 py-2.5 rounded-md hover:bg-border transition flex items-center gap-1.5">
+            <UserPlus size={16} />
+            Team
+          </Link>
+          <Link href="/dashboard/upload"
+            className="bg-ink text-paper text-sm px-4 py-2.5 rounded-md hover:opacity-90 transition flex items-center gap-2 card-shadow">
+            <Plus size={16} strokeWidth={2.5} />
+            New meeting
+          </Link>
+        </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-6 py-12">
