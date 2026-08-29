@@ -2,13 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { ArrowLeft, FileText, ShieldAlert, ListChecks } from "lucide-react";
 import { DeleteButton } from "./DeleteButton";
+import { MoveMeetingButton } from "./MoveMeetingButton";
 
 export default async function MeetingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
 
   const { data: meeting } = await supabase
-    .from("meetings").select("*, clients(full_name, email)").eq("id", id).single();
+    .from("meetings").select("*, clients(id, full_name, email)").eq("id", id).single();
   const { data: facts } = await supabase
     .from("extracted_facts").select("payload").eq("meeting_id", id).single();
   const { data: notes } = await supabase
@@ -30,7 +31,10 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
             <p className="font-mono text-xs text-ink-muted uppercase tracking-widest">Client</p>
             <h1 className="font-display text-3xl text-ink mt-1">{meeting?.clients?.full_name}</h1>
           </div>
-          <DeleteButton meetingId={id} />
+          <div className="flex items-center gap-4">
+            <MoveMeetingButton meetingId={id} currentClientId={meeting?.clients?.id} />
+            <DeleteButton meetingId={id} />
+          </div>
         </div>
 
         <section className="bg-surface border border-border rounded-xl p-7 card-shadow">
