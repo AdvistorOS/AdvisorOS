@@ -14,37 +14,49 @@ export default function UploadPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return;
-    setStatus("Uploading…");
 
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      setStatus("Getting user...");
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !user) { setStatus("Auth error: " + (userErr?.message ?? "no user")); return; }
 
-    const { data: client } = await supabase
-      .from("clients")
-      .insert({ full_name: clientName, email: clientEmail, adviser_id: user!.id })
-      .select()
-      .single();
+      setStatus("Creating client record...");
+      const { data: client, error: clientErr } = await supabase
+        .from("clients")
+        .insert({ full_name: clientName, email: clientEmail, adviser_id: user.id })
+        .select()
+        .single();
+      if (clientErr) { setStatus("Client insert error: " + clientErr.message); return; }
 
-    const filePath = `${client.id}/${Date.now()}-${file.name}`;
-    await supabase.storage.from("recordings").upload(filePath, file);
-    const { data: urlData } = supabase.storage.from("recordings").getPublicUrl(filePath);
+      setStatus("Uploading file...");
+      const filePath = `${client.id}/${Date.now()}-${file.name}`;
+      const { error: uploadErr } = await supabase.storage.from("recordings").upload(filePath, file);
+      if (uploadErr) { setStatus("Storage upload error: " + uploadErr.message); return; }
 
-    const { data: meeting } = await supabase
-      .from("meetings")
-      .insert({ client_id: client.id, adviser_id: user!.id, media_url: urlData.publicUrl })
-      .select()
-      .single();
+      const { data: urlData } = supabase.storage.from("recordings").getPublicUrl(filePath);
 
-    setStatus("Processing (about a minute)…");
+      setStatus("Creating meeting record...");
+      const { data: meeting, error: meetingErr } = await supabase
+        .from("meetings")
+        .insert({ client_id: client.id, adviser_id: user.id, media_url: urlData.publicUrl })
+        .select()
+        .single();
+      if (meetingErr) { setStatus("Meeting insert error: " + meetingErr.message); return; }
 
-    const res = await fetch("/api/process-meeting", {
-      method: "POST",
-      body: JSON.stringify({ meetingId: meeting.id }),
-    });
+      setStatus("Processing (transcription + AI, ~1 min)...");
+      const res = await fetch("/api/process-meeting", {
+        method: "POST",
+        body: JSON.stringify({ meetingId: meeting.id }),
+      });
 
-    if (res.ok) {
-      router.push(`/dashboard/meetings/${meeting.id}`);
-    } else {
-      setStatus("Something went wrong — check the dashboard.");
+      if (res.ok) {
+        router.push(`/dashboard/meetings/${meeting.id}`);
+      } else {
+        const body = await res.text();
+        setStatus("Processing failed: " + body);
+      }
+    } catch (err: any) {
+      setStatus("Unexpected error: " + err.message);
     }
   }
 
@@ -68,7 +80,7 @@ export default function UploadPage() {
           <button type="submit" className="bg-ink text-paper text-sm rounded-sm px-3 py-2 w-full hover:opacity-90 transition">
             Upload & process
           </button>
-          {status && <p className="font-mono text-xs text-ink-muted">{status}</p>}
+          {status && <p className="font-mono text-xs text-ink-muted break-all">{status}</p>}
         </form>
       </main>
     </div>
