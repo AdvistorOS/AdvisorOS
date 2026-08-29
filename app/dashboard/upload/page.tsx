@@ -39,12 +39,16 @@ export default function UploadPage() {
       const { error: uploadErr } = await supabase.storage.from("recordings").upload(filePath, file);
       if (uploadErr) { setStatus("Storage upload error: " + uploadErr.message); return; }
 
-      const { data: urlData } = supabase.storage.from("recordings").getPublicUrl(filePath);
+      setStatus("Generating access link...");
+      const { data: signedData, error: signErr } = await supabase.storage
+        .from("recordings")
+        .createSignedUrl(filePath, 3600);
+      if (signErr || !signedData) { setStatus("Signed URL error: " + (signErr?.message ?? "unknown")); return; }
 
       setStatus("Creating meeting record...");
       const { data: meeting, error: meetingErr } = await supabase
         .from("meetings")
-        .insert({ client_id: client.id, adviser_id: user.id, media_url: urlData.publicUrl })
+        .insert({ client_id: client.id, adviser_id: user.id, media_url: signedData.signedUrl })
         .select()
         .single();
       if (meetingErr) { setStatus("Meeting insert error: " + meetingErr.message); return; }
