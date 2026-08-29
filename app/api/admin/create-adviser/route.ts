@@ -53,4 +53,3 @@ export async function POST(req: Request) {
 
   return Response.json({ email, password, emailSent, emailError });
 }
-}
