@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { ArrowLeft, FileText, ShieldAlert, ListChecks } from "lucide-react";
 
 export default async function MeetingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,38 +16,45 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
   return (
     <div className="min-h-screen bg-paper">
       <header className="border-b border-border px-8 py-5 flex items-center gap-4">
-        <Link href="/dashboard" className="text-ink-muted hover:text-brass transition text-sm">
-          ← Back
+        <Link href="/dashboard" className="text-ink-muted hover:text-brass transition flex items-center gap-1.5 text-sm">
+          <ArrowLeft size={16} />
+          Back
         </Link>
-        <span className="font-display text-xl text-ink">AdvisorOS</span>
+        <span className="font-display text-xl text-ink ml-2">AdvisorOS</span>
       </header>
 
-      <main className="max-w-2xl mx-auto px-6 py-10 space-y-10">
+      <main className="max-w-2xl mx-auto px-6 py-12 space-y-8">
         <div>
-          <p className="font-mono text-xs text-ink-muted uppercase tracking-wide">Client</p>
-          <h1 className="font-display text-2xl text-ink">{meeting?.clients?.full_name}</h1>
+          <p className="font-mono text-xs text-ink-muted uppercase tracking-widest">Client</p>
+          <h1 className="font-display text-3xl text-ink mt-1">{meeting?.clients?.full_name}</h1>
         </div>
 
-        <section className="bg-surface border border-border rounded-sm p-6">
-          <p className="font-mono text-xs text-brass uppercase tracking-wide mb-3">Meeting summary</p>
-          <p className="text-ink leading-relaxed whitespace-pre-wrap">
+        <section className="bg-surface border border-border rounded-xl p-7 card-shadow">
+          <div className="flex items-center gap-2 mb-4">
+            <FileText size={16} className="text-brass" />
+            <p className="font-mono text-xs text-brass uppercase tracking-widest">Meeting summary</p>
+          </div>
+          <p className="text-ink leading-relaxed whitespace-pre-wrap text-[15px]">
             {meeting?.client_summary ?? "Still processing…"}
           </p>
         </section>
 
         {notes?.payload && (
-          <section className="border-l-2 border-brass pl-5">
-            <p className="font-mono text-xs text-ink-muted uppercase tracking-wide mb-2">Adviser notes (internal only)</p>
-            <p className="text-sm text-ink mb-1">
-              Satisfaction: <span className="font-mono">{notes.payload.overall_satisfaction}</span>
+          <section className="bg-brass-soft/40 border border-brass/20 rounded-xl p-7">
+            <div className="flex items-center gap-2 mb-4">
+              <ShieldAlert size={16} className="text-brass" />
+              <p className="font-mono text-xs text-ink-muted uppercase tracking-widest">Adviser notes — internal only</p>
+            </div>
+            <p className="text-sm text-ink mb-2">
+              Satisfaction: <span className="font-mono font-medium">{notes.payload.overall_satisfaction}</span>
             </p>
             {notes.payload.dissatisfaction_signals?.length > 0 && (
-              <p className="text-sm text-warn mb-1">
+              <p className="text-sm text-warn mb-2">
                 Flagged: {notes.payload.dissatisfaction_signals.join("; ")}
               </p>
             )}
             {notes.payload.suggested_actions?.length > 0 && (
-              <ul className="text-sm text-ink-muted list-disc list-inside">
+              <ul className="text-sm text-ink-muted list-disc list-inside space-y-1">
                 {notes.payload.suggested_actions.map((a: string, i: number) => <li key={i}>{a}</li>)}
               </ul>
             )}
@@ -55,8 +63,11 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
 
         {facts?.payload && (
           <section>
-            <p className="font-mono text-xs text-ink-muted uppercase tracking-wide mb-3">Extracted facts</p>
-            <pre className="font-mono text-xs bg-surface border border-border rounded-sm p-4 overflow-x-auto text-ink-muted">
+            <div className="flex items-center gap-2 mb-3">
+              <ListChecks size={16} className="text-ink-muted" />
+              <p className="font-mono text-xs text-ink-muted uppercase tracking-widest">Extracted facts</p>
+            </div>
+            <pre className="font-mono text-xs bg-surface border border-border rounded-xl p-5 overflow-x-auto text-ink-muted card-shadow">
               {JSON.stringify(facts.payload, null, 2)}
             </pre>
           </section>
