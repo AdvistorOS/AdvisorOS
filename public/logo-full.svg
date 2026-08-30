@@ -1,0 +1,8 @@
+<svg width="200" height="48" viewBox="0 0 200 48" xmlns="http://www.w3.org/2000/svg">
+  <rect width="48" height="48" rx="12" fill="#0B5C52"/>
+  <rect x="12" y="28" width="4.5" height="10" rx="1.5" fill="#F7F6F1"/>
+  <rect x="19.5" y="22" width="4.5" height="16" rx="1.5" fill="#F7F6F1"/>
+  <rect x="27" y="14" width="4.5" height="24" rx="1.5" fill="#C9971E"/>
+  <path d="M12 12 Q15 7 18 12 T24 12" stroke="#C9971E" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.85"/>
+  <text x="60" y="31" font-family="Georgia, serif" font-size="22" font-weight="600" fill="#16241F">AdvisorOS</text>
+</svg>

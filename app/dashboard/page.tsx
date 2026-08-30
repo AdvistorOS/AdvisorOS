@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import Image from "next/image";
 import { Plus, Clock3, User, Settings } from "lucide-react";
 
 export default async function Dashboard() {
@@ -22,18 +23,21 @@ export default async function Dashboard() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="border-b border-border bg-surface/60 backdrop-blur-sm sticky top-0 z-10 px-8 py-5 flex items-center justify-between">
-        <div>
-          <span className="font-display text-xl text-ink tracking-tight">AdvisorOS</span>
-          <p className="text-ink-muted text-xs mt-0.5">Signed in as {user?.email}</p>
+      <header className="border-b border-border bg-surface/70 backdrop-blur-sm sticky top-0 z-10 px-8 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Image src="/logo-mark.svg" alt="" width={36} height={36} className="rounded-lg" />
+          <div>
+            <span className="font-display text-lg text-ink tracking-tight">AdvisorOS</span>
+            <p className="text-ink-muted text-xs -mt-0.5">{user?.email}</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/dashboard/settings"
-            className="text-ink-muted p-2.5 rounded-md hover:bg-border transition">
+            className="text-ink-muted p-2.5 rounded-md hover:bg-teal-soft transition">
             <Settings size={16} />
           </Link>
           <Link href="/dashboard/upload"
-            className="bg-ink text-paper text-sm px-4 py-2.5 rounded-md hover:opacity-90 transition flex items-center gap-2 card-shadow">
+            className="bg-teal text-paper text-sm px-4 py-2.5 rounded-md hover:opacity-90 transition flex items-center gap-2 card-shadow">
             <Plus size={16} strokeWidth={2.5} />
             New meeting
           </Link>
@@ -47,7 +51,7 @@ export default async function Dashboard() {
         {groups.length === 0 && (
           <div className="border border-dashed border-border rounded-lg py-16 text-center">
             <p className="text-ink-muted text-sm mb-4">No meetings yet.</p>
-            <Link href="/dashboard/upload" className="text-brass text-sm font-medium hover:underline">
+            <Link href="/dashboard/upload" className="text-teal text-sm font-medium hover:underline">
               Upload your first recording →
             </Link>
           </div>
@@ -57,8 +61,8 @@ export default async function Dashboard() {
           {groups.map(([clientId, group]) => (
             <div key={clientId}>
               <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-7 h-7 rounded-full bg-brass-soft flex items-center justify-center">
-                  <User size={13} className="text-brass" strokeWidth={2} />
+                <div className="w-7 h-7 rounded-full bg-teal-soft flex items-center justify-center">
+                  <User size={13} className="text-teal" strokeWidth={2} />
                 </div>
                 <h2 className="font-display text-lg text-ink">{group.name}</h2>
                 <span className="font-mono text-xs text-ink-muted">({group.meetings.length})</span>
@@ -69,7 +73,7 @@ export default async function Dashboard() {
                   const sentimentStyle =
                     sentiment === "positive" ? "bg-good-soft text-good" :
                     sentiment === "unhappy" ? "bg-warn-soft text-warn" :
-                    "bg-brass-soft text-ink-muted";
+                    "bg-brass-soft text-brass";
                   return (
                     <Link key={m.id} href={`/dashboard/meetings/${m.id}`}
                       className="flex items-center justify-between bg-surface border border-border rounded-lg px-5 py-3.5 card-shadow card-shadow-hover transition group">
