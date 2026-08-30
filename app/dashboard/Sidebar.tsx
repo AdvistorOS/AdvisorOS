@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  LayoutDashboard, Calendar, CalendarDays, Mic, Users, FolderOpen, CheckSquare,
+  LayoutDashboard, Calendar, CalendarDays, Mic, Users, FolderOpen, CheckSquare, Search,
   Settings, User, ChevronUp, LogOut, Menu, X,
 } from "lucide-react";
 
 const NAV = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Search", href: "/dashboard/search", icon: Search },
   { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
   { label: "Meetings", href: "/dashboard/meetings", icon: Calendar },
   { label: "New Meeting", href: "/dashboard/record", icon: Mic },
