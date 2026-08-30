@@ -1,13 +1,19 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { Plus, Clock3 } from "lucide-react";
+import { Skeleton } from "../Skeleton";
 
-export default async function MeetingsPage() {
-  const supabase = await createClient();
-  const { data: meetings } = await supabase
-    .from("meetings")
-    .select("*, clients(full_name), extracted_facts(payload, reviewed)")
-    .order("created_at", { ascending: false });
+export default function MeetingsPage() {
+  const supabase = createClient();
+  const [meetings, setMeetings] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    supabase.from("meetings").select("*, clients(full_name), extracted_facts(payload, reviewed)")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setMeetings(data ?? []));
+  }, []);
 
   return (
     <main className="max-w-4xl mx-auto px-8 py-10">
@@ -22,15 +28,19 @@ export default async function MeetingsPage() {
         </Link>
       </div>
 
-      {!meetings?.length && <p className="text-sm text-ink-muted">No meetings yet.</p>}
+      {meetings === null && <Skeleton rows={5} />}
+      {meetings !== null && !meetings.length && <p className="text-sm text-ink-muted">No meetings yet.</p>}
 
       <div className="space-y-2.5">
         {meetings?.map((m: any) => {
           const facts = m.extracted_facts?.[0];
           const factCount = facts?.payload?.fields?.length ?? 0;
           const reviewed = facts?.reviewed;
-          const statusLabel = m.status !== "done" ? "Processing" : reviewed ? "Approved" : "Needs review";
-          const statusStyle = statusLabel === "Approved" ? "bg-good-soft text-good" : statusLabel === "Needs review" ? "bg-warn-soft text-warn" : "bg-brass-soft text-brass";
+          const statusLabel = m.status === "failed" ? "Failed" : m.status !== "done" ? "Processing" : reviewed ? "Approved" : "Needs review";
+          const statusStyle =
+            statusLabel === "Approved" ? "bg-good-soft text-good" :
+            statusLabel === "Failed" ? "bg-warn-soft text-warn" :
+            statusLabel === "Needs review" ? "bg-warn-soft text-warn" : "bg-brass-soft text-brass";
           return (
             <Link key={m.id} href={`/dashboard/meetings/${m.id}`}
               className="flex items-center justify-between bg-surface border border-border rounded-xl px-5 py-4 card-shadow card-shadow-hover transition">

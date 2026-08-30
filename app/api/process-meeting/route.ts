@@ -19,13 +19,17 @@ export async function POST(req: Request) {
       return Response.json({ step: "fetch meeting", error: meetingFetchErr?.message ?? "not found" }, { status: 500 });
     }
 
+    await supabaseAdmin.from("meetings").update({ status: "transcribing" }).eq("id", meetingId);
+
     let transcript;
     try {
       transcript = await aai.transcripts.transcribe({ audio: meeting.media_url, speaker_labels: true });
     } catch (e: any) {
+      await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
       return Response.json({ step: "assemblyai transcribe", error: e.message }, { status: 500 });
     }
     if (transcript.status === "error") {
+      await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
       return Response.json({ step: "assemblyai transcribe status", error: transcript.error }, { status: 500 });
     }
     const transcriptText = transcript.text ?? "";
@@ -34,15 +38,16 @@ export async function POST(req: Request) {
       meeting_id: meetingId, full_text: transcriptText, utterances: transcript.utterances,
     });
     if (transcriptInsertErr) {
+      await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
       return Response.json({ step: "insert transcript", error: transcriptInsertErr.message }, { status: 500 });
     }
 
-    let facts;
-    try {
-      const extraction = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 3000,
-        system: `You are assisting a UK wealth management adviser. Extract information from this
+    await supabaseAdmin.from("meetings").update({ status: "extracting" }).eq("id", meetingId);
+
+    const extractionPromise = anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 3000,
+      system: `You are assisting a UK wealth management adviser. Extract information from this
 client meeting transcript as raw JSON matching this exact shape, nothing else, no markdown fences:
 
 {
@@ -75,41 +80,39 @@ client meeting transcript as raw JSON matching this exact shape, nothing else, n
 
 Only include fields and attention_items genuinely supported by the transcript. All monetary
 figures are in GBP unless stated otherwise. Do not invent information.`,
-        messages: [{ role: "user", content: transcriptText }],
-      });
+      messages: [{ role: "user", content: transcriptText }],
+    });
+
+    const summaryPromise = anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 500,
+      system: "Write a short, neutral, plain-English summary of this meeting for the client's own records. Topics discussed and agreed next steps only. All monetary figures are in GBP unless stated otherwise.",
+      messages: [{ role: "user", content: transcriptText }],
+    });
+
+    let facts, summary;
+    try {
+      const [extraction, summaryResp] = await Promise.all([extractionPromise, summaryPromise]);
       const rawText = extraction.content.find((b) => b.type === "text")!.text;
       facts = JSON.parse(stripFences(rawText));
+      summary = summaryResp.content.find((b) => b.type === "text")!.text;
     } catch (e: any) {
-      return Response.json({ step: "anthropic extraction", error: e.message }, { status: 500 });
+      await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
+      return Response.json({ step: "anthropic extraction or summary", error: e.message }, { status: 500 });
     }
 
     const { error: factsInsertErr } = await supabaseAdmin.from("extracted_facts").insert({
       meeting_id: meetingId, category: "facts", payload: facts,
     });
     if (factsInsertErr) {
+      await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
       return Response.json({ step: "insert extracted_facts", error: factsInsertErr.message }, { status: 500 });
     }
 
     if (facts.client_sentiment) {
-      const { error: notesErr } = await supabaseAdmin.from("internal_notes").insert({
+      await supabaseAdmin.from("internal_notes").insert({
         meeting_id: meetingId, type: "sentiment", payload: facts.client_sentiment,
       });
-      if (notesErr) {
-        return Response.json({ step: "insert internal_notes", error: notesErr.message }, { status: 500 });
-      }
-    }
-
-    let summary;
-    try {
-      const summaryResp = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 500,
-        system: "Write a short, neutral, plain-English summary of this meeting for the client's own records. Topics discussed and agreed next steps only. All monetary figures are in GBP unless stated otherwise.",
-        messages: [{ role: "user", content: transcriptText }],
-      });
-      summary = summaryResp.content.find((b) => b.type === "text")!.text;
-    } catch (e: any) {
-      return Response.json({ step: "anthropic summary", error: e.message }, { status: 500 });
     }
 
     const { error: updateErr } = await supabaseAdmin.from("meetings").update({
@@ -121,6 +124,7 @@ figures are in GBP unless stated otherwise. Do not invent information.`,
 
     return Response.json({ ok: true });
   } catch (e: any) {
+    await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
     return Response.json({ step: "unexpected", error: e.message ?? String(e) }, { status: 500 });
   }
 }
