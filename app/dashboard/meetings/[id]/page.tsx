@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { ArrowLeft, FileText, ShieldAlert, ListChecks } from "lucide-react";
+import { ArrowLeft, FileText, ShieldAlert, ListChecks, ClipboardCheck } from "lucide-react";
 import { DeleteButton } from "./DeleteButton";
 import { MoveMeetingButton } from "./MoveMeetingButton";
 
@@ -11,14 +11,14 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
   const { data: meeting } = await supabase
     .from("meetings").select("*, clients(id, full_name, email)").eq("id", id).single();
   const { data: facts } = await supabase
-    .from("extracted_facts").select("payload").eq("meeting_id", id).single();
+    .from("extracted_facts").select("payload, reviewed").eq("meeting_id", id).single();
   const { data: notes } = await supabase
     .from("internal_notes").select("payload").eq("meeting_id", id).single();
 
   return (
     <div className="min-h-screen bg-paper">
       <header className="border-b border-border px-8 py-5 flex items-center gap-4">
-        <Link href="/dashboard" className="text-ink-muted hover:text-brass transition flex items-center gap-1.5 text-sm">
+        <Link href="/dashboard" className="text-ink-muted hover:text-teal transition flex items-center gap-1.5 text-sm">
           <ArrowLeft size={16} />
           Back
         </Link>
@@ -36,6 +36,12 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
             <DeleteButton meetingId={id} />
           </div>
         </div>
+
+        <Link href={`/dashboard/meetings/${id}/review`}
+          className="flex items-center justify-center gap-2 bg-teal text-paper text-sm font-medium rounded-md px-4 py-2.5 hover:opacity-90 transition card-shadow">
+          <ClipboardCheck size={16} />
+          {facts?.reviewed ? "View review" : "Review this meeting"}
+        </Link>
 
         <section className="bg-surface border border-border rounded-xl p-7 card-shadow">
           <div className="flex items-center gap-2 mb-4">
