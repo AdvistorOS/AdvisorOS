@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { ArrowLeft, Clock3 } from "lucide-react";
 import { BriefCard } from "./BriefCard";
+import { DeleteClientButton } from "./DeleteClientButton";
 
 const CATEGORY_LABELS: Record<string, string> = {
   income: "Income", expenditure: "Expenditure", assets: "Assets", liabilities: "Liabilities",
@@ -25,69 +26,66 @@ export default async function ClientRecord({ params }: { params: Promise<{ id: s
   }
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="border-b border-border px-8 py-5 flex items-center gap-4">
-        <Link href="/dashboard" className="text-ink-muted hover:text-teal transition flex items-center gap-1.5 text-sm">
+    <main className="max-w-2xl mx-auto px-8 py-10 space-y-8">
+      <div className="flex items-center justify-between">
+        <Link href="/dashboard/clients" className="text-ink-muted hover:text-teal transition flex items-center gap-1.5 text-sm">
           <ArrowLeft size={16} /> Back
         </Link>
-        <span className="font-display text-xl text-ink ml-2">AdvisorOS</span>
-      </header>
+        <DeleteClientButton clientId={id} />
+      </div>
 
-      <main className="max-w-2xl mx-auto px-6 py-12 space-y-8">
-        <h1 className="font-display text-3xl text-ink">{client?.full_name}</h1>
+      <h1 className="font-display text-3xl text-ink">{client?.full_name}</h1>
 
-        <BriefCard clientId={id} />
+      <BriefCard clientId={id} />
 
-        {actions && actions.length > 0 && (
-          <section>
-            <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-3">Open actions</p>
-            <div className="space-y-2">
-              {actions.map((a: any) => (
-                <div key={a.id} className="bg-surface border border-border rounded-lg px-4 py-3 text-sm text-ink flex justify-between card-shadow">
-                  <span>{a.description}</span>
-                  <span className="font-mono text-xs text-ink-muted">{a.owner}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
+      {actions && actions.length > 0 && (
         <section>
-          <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-3">Client record</p>
-          {!clientFacts?.length && <p className="text-sm text-ink-muted">No confirmed facts yet.</p>}
-          <div className="space-y-5">
-            {Object.entries(grouped).map(([category, items]) => (
-              <div key={category}>
-                <p className="text-xs font-mono text-brass uppercase tracking-wide mb-2">{CATEGORY_LABELS[category] ?? category}</p>
-                <div className="space-y-2">
-                  {items.map((f: any) => (
-                    <div key={f.id} className="bg-surface border border-border rounded-lg p-4 card-shadow">
-                      <p className="text-xs text-ink-muted">{f.data.label}</p>
-                      <p className="font-display text-lg text-ink">{f.data.value}</p>
-                    </div>
-                  ))}
-                </div>
+          <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-3">Open actions</p>
+          <div className="space-y-2">
+            {actions.map((a: any) => (
+              <div key={a.id} className="bg-surface border border-border rounded-lg px-4 py-3 text-sm text-ink flex justify-between card-shadow">
+                <span>{a.description}</span>
+                <span className="font-mono text-xs text-ink-muted">{a.owner}</span>
               </div>
             ))}
           </div>
         </section>
+      )}
 
-        <section>
-          <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-3">Meeting history</p>
-          <div className="space-y-2">
-            {meetings?.map((m: any) => (
-              <Link key={m.id} href={`/dashboard/meetings/${m.id}`}
-                className="flex items-center justify-between bg-surface border border-border rounded-lg px-4 py-3 card-shadow card-shadow-hover transition">
-                <p className="font-mono text-xs text-ink-muted flex items-center gap-1.5">
-                  <Clock3 size={11} />
-                  {new Date(m.created_at).toLocaleDateString()}
-                </p>
-                <span className="font-mono text-xs text-ink-muted">{m.status}</span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      </main>
-    </div>
+      <section>
+        <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-3">Client record</p>
+        {!clientFacts?.length && <p className="text-sm text-ink-muted">No confirmed facts yet.</p>}
+        <div className="space-y-5">
+          {Object.entries(grouped).map(([category, items]) => (
+            <div key={category}>
+              <p className="text-xs font-mono text-brass uppercase tracking-wide mb-2">{CATEGORY_LABELS[category] ?? category}</p>
+              <div className="space-y-2">
+                {items.map((f: any) => (
+                  <div key={f.id} className="bg-surface border border-border rounded-lg p-4 card-shadow">
+                    <p className="text-xs text-ink-muted">{f.data.label}</p>
+                    <p className="font-display text-lg text-ink">{f.data.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-3">Meeting history</p>
+        <div className="space-y-2">
+          {meetings?.map((m: any) => (
+            <Link key={m.id} href={`/dashboard/meetings/${m.id}`}
+              className="flex items-center justify-between bg-surface border border-border rounded-lg px-4 py-3 card-shadow card-shadow-hover transition">
+              <p className="font-mono text-xs text-ink-muted flex items-center gap-1.5">
+                <Clock3 size={11} /> {new Date(m.created_at).toLocaleDateString()}
+              </p>
+              <span className="font-mono text-xs text-ink-muted">{m.status}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+    </main>
   );
 }
