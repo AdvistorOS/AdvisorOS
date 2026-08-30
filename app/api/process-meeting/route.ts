@@ -5,6 +5,10 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 const aai = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY! });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
+function stripFences(text: string) {
+  return text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+}
+
 export async function POST(req: Request) {
   const { meetingId } = await req.json();
 
@@ -48,12 +52,13 @@ export async function POST(req: Request) {
         system: `Extract structured wealth-management facts (income, objectives,
 attitude_to_risk, action_items) from this transcript, AND a separate
 client_sentiment object (overall_satisfaction, dissatisfaction_signals,
-suggested_actions) based only on what was explicitly said — no speculation.
-Respond with ONLY valid JSON, no markdown fences.`,
+suggested_actions) based only on what was explicitly said. All monetary
+figures are in GBP unless stated otherwise. Respond with ONLY raw JSON —
+no markdown code fences, no backticks, no explanation text before or after.`,
         messages: [{ role: "user", content: transcriptText }],
       });
       const rawText = extraction.content.find((b) => b.type === "text")!.text;
-      facts = JSON.parse(rawText);
+      facts = JSON.parse(stripFences(rawText));
     } catch (e: any) {
       return Response.json({ step: "anthropic extraction", error: e.message }, { status: 500 });
     }
@@ -75,7 +80,7 @@ Respond with ONLY valid JSON, no markdown fences.`,
       const summaryResp = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 500,
-        system: "Write a short, neutral, plain-English summary of this meeting for the client's own records. Topics discussed and agreed next steps only.",
+        system: "Write a short, neutral, plain-English summary of this meeting for the client's own records. Topics discussed and agreed next steps only. All monetary figures are in GBP unless stated otherwise.",
         messages: [{ role: "user", content: transcriptText }],
       });
       summary = summaryResp.content.find((b) => b.type === "text")!.text;
