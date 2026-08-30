@@ -26,7 +26,11 @@ export default function ClientsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setError("Not signed in."); setSaving(false); return; }
 
-    const { error } = await supabase.from("clients").insert({ full_name: name, email, adviser_id: user.id });
+    const { error } = await supabase.from("clients").insert({
+      full_name: name,
+      email: email.trim() || null,
+      adviser_id: user.id,
+    });
     if (error) { setError(error.message); setSaving(false); return; }
 
     setSaving(false);
@@ -74,7 +78,7 @@ export default function ClientsPage() {
             <form onSubmit={handleCreate} className="space-y-3">
               <input placeholder="Client name" required value={name} onChange={(e) => setName(e.target.value)}
                 className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal" />
-              <input placeholder="Client email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+              <input placeholder="Client email (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal" />
               <button type="submit" disabled={saving}
                 className="bg-teal text-paper text-sm font-medium rounded-md px-4 py-2.5 w-full hover:opacity-90 transition disabled:opacity-50">
