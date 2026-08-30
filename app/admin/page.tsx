@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Building2, UserPlus, Copy, Check, Mail } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 
 export default function AdminPage() {
   const [firms, setFirms] = useState<{ id: string; name: string }[]>([]);
@@ -9,7 +9,7 @@ export default function AdminPage() {
   const [selectedFirm, setSelectedFirm] = useState("");
   const [adviserEmail, setAdviserEmail] = useState("");
   const [adviserName, setAdviserName] = useState("");
-  const [result, setResult] = useState<{ email: string; password: string; emailSent: boolean; emailError?: string } | null>(null);
+  const [result, setResult] = useState<{ email: string; password: string; emailSent: boolean } | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const supabase = createClient();
@@ -25,7 +25,11 @@ export default function AdminPage() {
     setError("");
     const res = await fetch("/api/admin/create-firm", { method: "POST", body: JSON.stringify({ name: firmName }) });
     const data = await res.json();
-    if (res.ok) { setFirmName(""); loadFirms(); } else { setError(data.error); }
+    if (res.ok) {
+      setFirmName("");
+      await loadFirms();
+      setSelectedFirm(data.firm.id);
+    } else setError(data.error);
   }
 
   async function handleCreateAdviser(e: React.FormEvent) {
@@ -37,7 +41,7 @@ export default function AdminPage() {
       body: JSON.stringify({ email: adviserEmail, fullName: adviserName, firmId: selectedFirm }),
     });
     const data = await res.json();
-    if (res.ok) { setResult(data); setAdviserEmail(""); setAdviserName(""); } else { setError(data.error); }
+    if (res.ok) { setResult(data); setAdviserEmail(""); setAdviserName(""); } else setError(data.error);
   }
 
   function copyCredentials() {
@@ -48,73 +52,51 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="border-b border-border px-8 py-5">
-        <span className="font-display text-xl text-ink">AdvisorOS — Admin</span>
-      </header>
+    <div className="min-h-screen bg-paper flex items-start justify-center px-6 py-16">
+      <div className="max-w-sm w-full space-y-6">
+        <p className="font-display text-xl text-ink text-center">AdvisorOS Admin</p>
 
-      <main className="max-w-xl mx-auto px-6 py-12 space-y-10">
-        <section className="bg-surface border border-border rounded-xl p-7 card-shadow">
-          <div className="flex items-center gap-2 mb-4">
-            <Building2 size={16} className="text-brass" />
-            <h2 className="font-display text-lg text-ink">New firm</h2>
-          </div>
-          <form onSubmit={handleCreateFirm} className="flex gap-2">
-            <input placeholder="Firm name" required value={firmName} onChange={(e) => setFirmName(e.target.value)}
-              className="border border-border rounded-md px-3.5 py-2.5 flex-1 bg-paper text-ink text-sm focus:outline-none focus:border-brass" />
-            <button type="submit" className="bg-ink text-paper text-sm px-4 rounded-md hover:opacity-90 transition">Create</button>
-          </form>
-        </section>
+        <div className="bg-surface border border-border rounded-xl p-6 card-shadow space-y-4">
+          <select value={selectedFirm} onChange={(e) => setSelectedFirm(e.target.value)}
+            className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal">
+            <option value="">New firm…</option>
+            {firms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
 
-        <section className="bg-surface border border-border rounded-xl p-7 card-shadow">
-          <div className="flex items-center gap-2 mb-4">
-            <UserPlus size={16} className="text-brass" />
-            <h2 className="font-display text-lg text-ink">New adviser login</h2>
-          </div>
-          <form onSubmit={handleCreateAdviser} className="space-y-3">
-            <select required value={selectedFirm} onChange={(e) => setSelectedFirm(e.target.value)}
-              className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-brass">
-              <option value="">Select firm…</option>
-              {firms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
-            <input placeholder="Adviser name" required value={adviserName} onChange={(e) => setAdviserName(e.target.value)}
-              className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-brass" />
-            <input placeholder="Adviser email" type="email" required value={adviserEmail} onChange={(e) => setAdviserEmail(e.target.value)}
-              className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-brass" />
-            <button type="submit" className="bg-ink text-paper text-sm px-4 py-2.5 rounded-md w-full hover:opacity-90 transition">
-              Create login
-            </button>
-          </form>
-          {error && <p className="text-warn text-xs mt-3">{error}</p>}
+          {!selectedFirm && (
+            <form onSubmit={handleCreateFirm} className="flex gap-2">
+              <input placeholder="Firm name" required value={firmName} onChange={(e) => setFirmName(e.target.value)}
+                className="border border-border rounded-md px-3.5 py-2.5 flex-1 bg-paper text-ink text-sm focus:outline-none focus:border-teal" />
+              <button type="submit" className="bg-ink text-paper text-sm px-4 rounded-md hover:opacity-90 transition">Create</button>
+            </form>
+          )}
+
+          {selectedFirm && (
+            <form onSubmit={handleCreateAdviser} className="space-y-3 pt-2 border-t border-border">
+              <input placeholder="Adviser name" required value={adviserName} onChange={(e) => setAdviserName(e.target.value)}
+                className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal" />
+              <input placeholder="Adviser email" type="email" required value={adviserEmail} onChange={(e) => setAdviserEmail(e.target.value)}
+                className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal" />
+              <button type="submit" className="bg-teal text-paper text-sm px-4 py-2.5 rounded-md w-full hover:opacity-90 transition">
+                Create login
+              </button>
+            </form>
+          )}
+
+          {error && <p className="text-warn text-xs">{error}</p>}
+
           {result && (
-            <div className="mt-5 bg-good-soft border border-good/20 rounded-md p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Mail size={13} className={result.emailSent ? "text-good" : "text-warn"} />
-                <p className="text-sm text-ink font-medium">
-                  {result.emailSent ? "Emailed to them automatically" : "Email failed — send manually"}
-                </p>
-              </div>
-              <p className="font-mono text-xs text-ink">URL: https://advisor-os-fawn.vercel.app</p>
-              <p className="font-mono text-xs text-ink">Email: {result.email}</p>
-              <p className="font-mono text-xs text-ink mb-3">Password: {result.password}</p>
-              {result.emailError && <p className="text-xs text-warn mb-2">{result.emailError}</p>}
-              <button onClick={copyCredentials} className="flex items-center gap-1.5 text-xs text-brass hover:underline">
-                {copied ? <Check size={13} /> : <Copy size={13} />}
-                {copied ? "Copied" : "Copy all (backup)"}
+            <div className="bg-good-soft border border-good/20 rounded-md p-4">
+              <p className="text-xs text-ink-muted mb-1">{result.emailSent ? "Emailed automatically" : "Email failed — copy manually"}</p>
+              <p className="font-mono text-xs text-ink">{result.email}</p>
+              <p className="font-mono text-xs text-ink mb-2">{result.password}</p>
+              <button onClick={copyCredentials} className="flex items-center gap-1.5 text-xs text-teal hover:underline">
+                {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy"}
               </button>
             </div>
           )}
-        </section>
-
-        <section>
-          <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-3">Firms ({firms.length})</p>
-          <div className="space-y-2">
-            {firms.map((f) => (
-              <div key={f.id} className="bg-surface border border-border rounded-md px-4 py-3 text-sm text-ink">{f.name}</div>
-            ))}
-          </div>
-        </section>
-      </main>
+        </div>
+      </div>
     </div>
   );
 }
