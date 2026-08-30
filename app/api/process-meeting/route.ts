@@ -19,6 +19,17 @@ export async function POST(req: Request) {
       return Response.json({ step: "fetch meeting", error: meetingFetchErr?.message ?? "not found" }, { status: 500 });
     }
 
+    // Pull everything already known about this client from prior approved meetings
+    const { data: existingFacts } = await supabaseAdmin
+      .from("client_facts")
+      .select("category, data")
+      .eq("client_id", meeting.client_id)
+      .is("superseded_by", null);
+
+    const knownFactsText = (existingFacts ?? [])
+      .map((f: any) => `${f.data.label}: ${f.data.value}`)
+      .join("\n") || "No prior information on file — this is the first recorded meeting.";
+
     await supabaseAdmin.from("meetings").update({ status: "transcribing" }).eq("id", meetingId);
 
     let transcript;
@@ -34,6 +45,14 @@ export async function POST(req: Request) {
     }
     const transcriptText = transcript.text ?? "";
 
+    if (transcriptText.trim().length < 10) {
+      await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
+      return Response.json({
+        step: "empty transcript",
+        error: "No speech was detected in this recording. Try a longer or clearer recording (at least a few sentences).",
+      }, { status: 500 });
+    }
+
     const { error: transcriptInsertErr } = await supabaseAdmin.from("transcripts").insert({
       meeting_id: meetingId, full_text: transcriptText, utterances: transcript.utterances,
     });
@@ -47,8 +66,13 @@ export async function POST(req: Request) {
     const extractionPromise = anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 3000,
-      system: `You are assisting a UK wealth management adviser. Extract information from this
-client meeting transcript as raw JSON matching this exact shape, nothing else, no markdown fences:
+      system: `You are assisting a UK wealth management adviser. You already know the following
+about this client from previous meetings:
+
+${knownFactsText}
+
+Extract information from today's meeting transcript as raw JSON matching this exact shape,
+nothing else, no markdown fences:
 
 {
   "fields": [
@@ -58,12 +82,13 @@ client meeting transcript as raw JSON matching this exact shape, nothing else, n
       "label": "Human-readable label, e.g. 'Annual gross income'",
       "value": "Human-readable value, e.g. '£110,000' — never raw numbers or field codes",
       "evidence": "A short paraphrase of what the client actually said that supports this",
-      "confidence": "high | medium | low — low if the figure was approximate, unclear, or inferred rather than stated plainly"
+      "confidence": "high | medium | low",
+      "change_note": "Only include this key if this contradicts or updates something already known — e.g. 'Previously £95,000' — omit entirely if this is new or unchanged information"
     }
   ],
   "attention_items": [
     {
-      "title": "Short name of the missing/incomplete item, e.g. 'Retirement income target'",
+      "title": "Short name of the missing/incomplete item — only include things NOT already covered by what you already know above",
       "status": "Not established | Missing | Incomplete | Not sufficiently established",
       "description": "One sentence on what's missing and why the adviser should follow up"
     }
@@ -78,8 +103,9 @@ client meeting transcript as raw JSON matching this exact shape, nothing else, n
   }
 }
 
-Only include fields and attention_items genuinely supported by the transcript. All monetary
-figures are in GBP unless stated otherwise. Do not invent information.`,
+Only extract fields genuinely discussed in today's transcript — do not re-list things already known
+above unless the client restated or changed them. All monetary figures are in GBP unless stated
+otherwise. Do not invent information.`,
       messages: [{ role: "user", content: transcriptText }],
     });
 
