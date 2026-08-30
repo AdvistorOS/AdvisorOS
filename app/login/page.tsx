@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 
 export default function LoginPage() {
@@ -29,7 +28,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-paper flex items-center justify-center px-6">
       <div className="max-w-sm w-full bg-surface border border-border rounded-xl p-8 card-shadow">
-        <Image src="/logo-mark.svg" alt="" width={44} height={44} className="rounded-xl mb-4" />
+        <img src="/logo-mark.svg" alt="" width={44} height={44} className="rounded-xl mb-4" />
         <p className="font-display text-2xl text-ink mb-1">AdvisorOS</p>
         <p className="text-ink-muted text-sm mb-8">Meeting intelligence for wealth advisers</p>
 

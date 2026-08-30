@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import Image from "next/image";
 import { Plus, Clock3, User, Settings } from "lucide-react";
 
 export default async function Dashboard() {
@@ -25,7 +24,7 @@ export default async function Dashboard() {
     <div className="min-h-screen bg-paper">
       <header className="border-b border-border bg-surface/70 backdrop-blur-sm sticky top-0 z-10 px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Image src="/logo-mark.svg" alt="" width={36} height={36} className="rounded-lg" />
+          <img src="/logo-mark.svg" alt="" width={36} height={36} className="rounded-lg" />
           <div>
             <span className="font-display text-lg text-ink tracking-tight">AdvisorOS</span>
             <p className="text-ink-muted text-xs -mt-0.5">{user?.email}</p>
