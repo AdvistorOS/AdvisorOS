@@ -21,24 +21,17 @@ export async function POST(req: Request) {
 
     let transcript;
     try {
-      transcript = await aai.transcripts.transcribe({
-        audio: meeting.media_url,
-        speaker_labels: true,
-      });
+      transcript = await aai.transcripts.transcribe({ audio: meeting.media_url, speaker_labels: true });
     } catch (e: any) {
       return Response.json({ step: "assemblyai transcribe", error: e.message }, { status: 500 });
     }
-
     if (transcript.status === "error") {
       return Response.json({ step: "assemblyai transcribe status", error: transcript.error }, { status: 500 });
     }
-
     const transcriptText = transcript.text ?? "";
 
     const { error: transcriptInsertErr } = await supabaseAdmin.from("transcripts").insert({
-      meeting_id: meetingId,
-      full_text: transcriptText,
-      utterances: transcript.utterances,
+      meeting_id: meetingId, full_text: transcriptText, utterances: transcript.utterances,
     });
     if (transcriptInsertErr) {
       return Response.json({ step: "insert transcript", error: transcriptInsertErr.message }, { status: 500 });
@@ -48,13 +41,40 @@ export async function POST(req: Request) {
     try {
       const extraction = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 2048,
-        system: `Extract structured wealth-management facts (income, objectives,
-attitude_to_risk, action_items) from this transcript, AND a separate
-client_sentiment object (overall_satisfaction, dissatisfaction_signals,
-suggested_actions) based only on what was explicitly said. All monetary
-figures are in GBP unless stated otherwise. Respond with ONLY raw JSON —
-no markdown code fences, no backticks, no explanation text before or after.`,
+        max_tokens: 3000,
+        system: `You are assisting a UK wealth management adviser. Extract information from this
+client meeting transcript as raw JSON matching this exact shape, nothing else, no markdown fences:
+
+{
+  "fields": [
+    {
+      "key": "short_unique_slug",
+      "category": "income | expenditure | assets | liabilities | pensions | dependants | objectives | attitude_to_risk | capacity_for_loss | existing_products",
+      "label": "Human-readable label, e.g. 'Annual gross income'",
+      "value": "Human-readable value, e.g. '£110,000' — never raw numbers or field codes",
+      "evidence": "A short paraphrase of what the client actually said that supports this",
+      "confidence": "high | medium | low — low if the figure was approximate, unclear, or inferred rather than stated plainly"
+    }
+  ],
+  "attention_items": [
+    {
+      "title": "Short name of the missing/incomplete item, e.g. 'Retirement income target'",
+      "status": "Not established | Missing | Incomplete | Not sufficiently established",
+      "description": "One sentence on what's missing and why the adviser should follow up"
+    }
+  ],
+  "action_items": [
+    { "description": "...", "owner": "adviser | client" }
+  ],
+  "client_sentiment": {
+    "overall_satisfaction": "positive | neutral | unhappy",
+    "dissatisfaction_signals": ["..."],
+    "suggested_actions": ["..."]
+  }
+}
+
+Only include fields and attention_items genuinely supported by the transcript. All monetary
+figures are in GBP unless stated otherwise. Do not invent information.`,
         messages: [{ role: "user", content: transcriptText }],
       });
       const rawText = extraction.content.find((b) => b.type === "text")!.text;
@@ -63,13 +83,17 @@ no markdown code fences, no backticks, no explanation text before or after.`,
       return Response.json({ step: "anthropic extraction", error: e.message }, { status: 500 });
     }
 
-    const { error: factsInsertErr } = await supabaseAdmin.from("extracted_facts").insert({ meeting_id: meetingId, category: "facts", payload: facts });
+    const { error: factsInsertErr } = await supabaseAdmin.from("extracted_facts").insert({
+      meeting_id: meetingId, category: "facts", payload: facts,
+    });
     if (factsInsertErr) {
       return Response.json({ step: "insert extracted_facts", error: factsInsertErr.message }, { status: 500 });
     }
 
     if (facts.client_sentiment) {
-      const { error: notesErr } = await supabaseAdmin.from("internal_notes").insert({ meeting_id: meetingId, type: "sentiment", payload: facts.client_sentiment });
+      const { error: notesErr } = await supabaseAdmin.from("internal_notes").insert({
+        meeting_id: meetingId, type: "sentiment", payload: facts.client_sentiment,
+      });
       if (notesErr) {
         return Response.json({ step: "insert internal_notes", error: notesErr.message }, { status: 500 });
       }
@@ -88,7 +112,9 @@ no markdown code fences, no backticks, no explanation text before or after.`,
       return Response.json({ step: "anthropic summary", error: e.message }, { status: 500 });
     }
 
-    const { error: updateErr } = await supabaseAdmin.from("meetings").update({ status: "done", client_summary: summary }).eq("id", meetingId);
+    const { error: updateErr } = await supabaseAdmin.from("meetings").update({
+      status: "done", client_summary: summary,
+    }).eq("id", meetingId);
     if (updateErr) {
       return Response.json({ step: "update meeting", error: updateErr.message }, { status: 500 });
     }
