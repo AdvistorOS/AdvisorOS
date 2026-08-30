@@ -1,126 +1,111 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { Plus, Clock3, User, Settings, Mic, AlertCircle } from "lucide-react";
+import { Calendar, AlertCircle, CheckSquare, Users, Clock3 } from "lucide-react";
 
-const REQUIRED_CATEGORIES = ["income", "objectives", "attitude_to_risk", "expenditure", "pensions"];
-const CATEGORY_LABELS: Record<string, string> = {
-  income: "income", objectives: "objectives", attitude_to_risk: "risk profile",
-  expenditure: "expenditure", pensions: "pensions",
-};
+const REQUIRED_CATEGORIES = ["income", "objectives", "attitude_to_risk"];
 
 export default async function Dashboard() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  const firstName = user?.email?.split("@")[0] ?? "there";
 
   const { data: meetings } = await supabase
-    .from("meetings")
-    .select("*, clients(id, full_name), internal_notes(payload)")
-    .order("created_at", { ascending: false });
+    .from("meetings").select("*, clients(id, full_name)").order("created_at", { ascending: false });
+  const { data: extracted } = await supabase
+    .from("extracted_facts").select("*, meetings!inner(id, adviser_id, clients(full_name))").eq("reviewed", false);
+  const { data: openActions } = await supabase.from("actions").select("*, clients(full_name)").eq("status", "open");
+  const { data: clientFacts } = await supabase.from("client_facts").select("client_id, category").is("superseded_by", null);
+  const { data: clients } = await supabase.from("clients").select("id, full_name");
 
-  const { data: allClientFacts } = await supabase
-    .from("client_facts")
-    .select("client_id, category")
-    .is("superseded_by", null);
+  const todayStr = new Date().toDateString();
+  const todaysMeetings = (meetings ?? []).filter((m) => new Date(m.created_at).toDateString() === todayStr);
 
-  const grouped: Record<string, { name: string; meetings: any[] }> = {};
-  for (const m of meetings ?? []) {
-    const clientId = m.clients?.id ?? "unknown";
-    const clientName = m.clients?.full_name ?? "Unknown client";
-    if (!grouped[clientId]) grouped[clientId] = { name: clientName, meetings: [] };
-    grouped[clientId].meetings.push(m);
+  const missingCount = (clients ?? []).filter((c) => {
+    const have = new Set((clientFacts ?? []).filter((f) => f.client_id === c.id).map((f) => f.category));
+    return REQUIRED_CATEGORIES.some((cat) => !have.has(cat));
+  }).length;
+
+  const attentionItems: { title: string; client: string }[] = [];
+  for (const ef of extracted ?? []) {
+    for (const item of ef.payload?.attention_items ?? []) {
+      attentionItems.push({ title: item.title, client: (ef as any).meetings?.clients?.full_name ?? "Unknown" });
+    }
   }
-  const groups = Object.entries(grouped).sort((a, b) => a[1].name.localeCompare(b[1].name));
 
-  function missingFor(clientId: string) {
-    const have = new Set((allClientFacts ?? []).filter((f) => f.client_id === clientId).map((f) => f.category));
-    return REQUIRED_CATEGORIES.filter((c) => !have.has(c));
-  }
+  const stats = [
+    { label: "Meetings today", value: todaysMeetings.length, icon: Calendar },
+    { label: "Awaiting review", value: extracted?.length ?? 0, icon: AlertCircle },
+    { label: "Outstanding tasks", value: openActions?.length ?? 0, icon: CheckSquare },
+    { label: "Clients needing info", value: missingCount, icon: Users },
+  ];
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="border-b border-border bg-surface/70 backdrop-blur-sm sticky top-0 z-10 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img src="/logo-mark.svg" alt="" width={36} height={36} className="rounded-lg" />
-          <div>
-            <span className="font-display text-lg text-ink tracking-tight">AdvisorOS</span>
-            <p className="text-ink-muted text-xs -mt-0.5">{user?.email}</p>
+    <main className="max-w-4xl mx-auto px-8 py-10">
+      <h1 className="font-display text-3xl text-ink mb-1">Good morning, {firstName}</h1>
+      <p className="text-ink-muted text-sm mb-8">Here's what needs your attention today.</p>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        {stats.map((s) => (
+          <div key={s.label} className="bg-surface border border-border rounded-xl p-5 card-shadow">
+            <s.icon size={16} className="text-teal mb-3" />
+            <p className="font-display text-2xl text-ink">{s.value}</p>
+            <p className="text-xs text-ink-muted mt-0.5">{s.label}</p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard/settings" className="text-ink-muted p-2.5 rounded-md hover:bg-teal-soft transition">
-            <Settings size={16} />
-          </Link>
-          <Link href="/dashboard/record" className="text-ink-muted text-sm px-3 py-2.5 rounded-md hover:bg-teal-soft transition flex items-center gap-1.5">
-            <Mic size={16} />
-            Record
-          </Link>
-          <Link href="/dashboard/upload"
-            className="bg-teal text-paper text-sm px-4 py-2.5 rounded-md hover:opacity-90 transition flex items-center gap-2 card-shadow">
-            <Plus size={16} strokeWidth={2.5} />
-            New meeting
-          </Link>
-        </div>
-      </header>
+        ))}
+      </div>
 
-      <main className="max-w-2xl mx-auto px-6 py-12">
-        <h1 className="font-display text-3xl text-ink mb-1">Clients</h1>
-        <p className="text-ink-muted text-sm mb-10">Meetings grouped by client.</p>
+      <div className="grid md:grid-cols-2 gap-8">
+        <section>
+          <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-3">Today's meetings</p>
+          {todaysMeetings.length === 0 ? (
+            <p className="text-sm text-ink-muted">Nothing scheduled today.</p>
+          ) : (
+            <div className="space-y-2">
+              {todaysMeetings.map((m: any) => (
+                <Link key={m.id} href={`/dashboard/meetings/${m.id}`}
+                  className="flex items-center justify-between bg-surface border border-border rounded-lg px-4 py-3 card-shadow card-shadow-hover transition">
+                  <span className="text-sm text-ink">{m.clients?.full_name}</span>
+                  <span className="font-mono text-xs text-ink-muted">{m.status}</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
 
-        {groups.length === 0 && (
-          <div className="border border-dashed border-border rounded-lg py-16 text-center">
-            <p className="text-ink-muted text-sm mb-4">No meetings yet.</p>
-            <Link href="/dashboard/upload" className="text-teal text-sm font-medium hover:underline">
-              Upload your first recording →
-            </Link>
-          </div>
-        )}
-
-        <div className="space-y-10">
-          {groups.map(([clientId, group]) => {
-            const missing = clientId !== "unknown" ? missingFor(clientId) : [];
-            return (
-              <div key={clientId}>
-                <div className="flex items-center gap-2.5 mb-1.5">
-                  <div className="w-7 h-7 rounded-full bg-teal-soft flex items-center justify-center">
-                    <User size={13} className="text-teal" strokeWidth={2} />
-                  </div>
-                  <h2 className="font-display text-lg text-ink">{group.name}</h2>
-                  <span className="font-mono text-xs text-ink-muted">({group.meetings.length})</span>
+        <section>
+          <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-3">AI attention required</p>
+          {attentionItems.length === 0 ? (
+            <p className="text-sm text-ink-muted">Nothing flagged.</p>
+          ) : (
+            <div className="space-y-2">
+              {attentionItems.slice(0, 6).map((item, i) => (
+                <div key={i} className="bg-warn-soft border border-warn/20 rounded-lg px-4 py-3">
+                  <p className="text-sm text-ink">{item.title}</p>
+                  <p className="text-xs text-ink-muted">{item.client}</p>
                 </div>
-                {missing.length > 0 && (
-                  <p className="flex items-center gap-1.5 text-xs text-warn mb-3 ml-9">
-                    <AlertCircle size={12} />
-                    Still needed: {missing.map((m) => CATEGORY_LABELS[m]).join(", ")}
-                  </p>
-                )}
-                <div className="space-y-2.5">
-                  {group.meetings.map((m: any) => {
-                    const sentiment = m.internal_notes?.[0]?.payload?.overall_satisfaction;
-                    const sentimentStyle =
-                      sentiment === "positive" ? "bg-good-soft text-good" :
-                      sentiment === "unhappy" ? "bg-warn-soft text-warn" :
-                      "bg-brass-soft text-brass";
-                    return (
-                      <Link key={m.id} href={`/dashboard/meetings/${m.id}`}
-                        className="flex items-center justify-between bg-surface border border-border rounded-lg px-5 py-3.5 card-shadow card-shadow-hover transition group">
-                        <p className="font-mono text-xs text-ink-muted flex items-center gap-1.5">
-                          <Clock3 size={11} />
-                          {new Date(m.created_at).toLocaleDateString()} · {m.status}
-                        </p>
-                        {sentiment && (
-                          <span className={`font-mono text-xs px-2.5 py-1 rounded-full ${sentimentStyle}`}>
-                            {sentiment}
-                          </span>
-                        )}
-                      </Link>
-                    );
-                  })}
-                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <section className="mt-10">
+        <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-3">Recent activity</p>
+        <div className="space-y-2">
+          {(meetings ?? []).slice(0, 6).map((m: any) => (
+            <Link key={m.id} href={`/dashboard/meetings/${m.id}`}
+              className="flex items-center justify-between bg-surface border border-border rounded-lg px-4 py-3 card-shadow card-shadow-hover transition">
+              <div>
+                <p className="text-sm text-ink">{m.clients?.full_name}</p>
+                <p className="font-mono text-xs text-ink-muted flex items-center gap-1.5 mt-0.5">
+                  <Clock3 size={11} /> {new Date(m.created_at).toLocaleDateString()}
+                </p>
               </div>
-            );
-          })}
+              <span className="font-mono text-xs text-ink-muted">{m.status}</span>
+            </Link>
+          ))}
         </div>
-      </main>
-    </div>
+      </section>
+    </main>
   );
 }
