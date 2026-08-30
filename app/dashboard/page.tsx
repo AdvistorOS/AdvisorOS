@@ -1,6 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { Plus, Clock3, User, Settings, Mic } from "lucide-react";
+import { Plus, Clock3, User, Settings, Mic, AlertCircle } from "lucide-react";
+
+const REQUIRED_CATEGORIES = ["income", "objectives", "attitude_to_risk", "expenditure", "pensions"];
+const CATEGORY_LABELS: Record<string, string> = {
+  income: "income", objectives: "objectives", attitude_to_risk: "risk profile",
+  expenditure: "expenditure", pensions: "pensions",
+};
 
 export default async function Dashboard() {
   const supabase = await createClient();
@@ -11,6 +17,11 @@ export default async function Dashboard() {
     .select("*, clients(id, full_name), internal_notes(payload)")
     .order("created_at", { ascending: false });
 
+  const { data: allClientFacts } = await supabase
+    .from("client_facts")
+    .select("client_id, category")
+    .is("superseded_by", null);
+
   const grouped: Record<string, { name: string; meetings: any[] }> = {};
   for (const m of meetings ?? []) {
     const clientId = m.clients?.id ?? "unknown";
@@ -19,6 +30,11 @@ export default async function Dashboard() {
     grouped[clientId].meetings.push(m);
   }
   const groups = Object.entries(grouped).sort((a, b) => a[1].name.localeCompare(b[1].name));
+
+  function missingFor(clientId: string) {
+    const have = new Set((allClientFacts ?? []).filter((f) => f.client_id === clientId).map((f) => f.category));
+    return REQUIRED_CATEGORIES.filter((c) => !have.has(c));
+  }
 
   return (
     <div className="min-h-screen bg-paper">
@@ -31,12 +47,10 @@ export default async function Dashboard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/dashboard/settings"
-            className="text-ink-muted p-2.5 rounded-md hover:bg-teal-soft transition">
+          <Link href="/dashboard/settings" className="text-ink-muted p-2.5 rounded-md hover:bg-teal-soft transition">
             <Settings size={16} />
           </Link>
-          <Link href="/dashboard/record"
-            className="text-ink-muted text-sm px-3 py-2.5 rounded-md hover:bg-teal-soft transition flex items-center gap-1.5">
+          <Link href="/dashboard/record" className="text-ink-muted text-sm px-3 py-2.5 rounded-md hover:bg-teal-soft transition flex items-center gap-1.5">
             <Mic size={16} />
             Record
           </Link>
@@ -62,40 +76,49 @@ export default async function Dashboard() {
         )}
 
         <div className="space-y-10">
-          {groups.map(([clientId, group]) => (
-            <div key={clientId}>
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-7 h-7 rounded-full bg-teal-soft flex items-center justify-center">
-                  <User size={13} className="text-teal" strokeWidth={2} />
+          {groups.map(([clientId, group]) => {
+            const missing = clientId !== "unknown" ? missingFor(clientId) : [];
+            return (
+              <div key={clientId}>
+                <div className="flex items-center gap-2.5 mb-1.5">
+                  <div className="w-7 h-7 rounded-full bg-teal-soft flex items-center justify-center">
+                    <User size={13} className="text-teal" strokeWidth={2} />
+                  </div>
+                  <h2 className="font-display text-lg text-ink">{group.name}</h2>
+                  <span className="font-mono text-xs text-ink-muted">({group.meetings.length})</span>
                 </div>
-                <h2 className="font-display text-lg text-ink">{group.name}</h2>
-                <span className="font-mono text-xs text-ink-muted">({group.meetings.length})</span>
+                {missing.length > 0 && (
+                  <p className="flex items-center gap-1.5 text-xs text-warn mb-3 ml-9">
+                    <AlertCircle size={12} />
+                    Still needed: {missing.map((m) => CATEGORY_LABELS[m]).join(", ")}
+                  </p>
+                )}
+                <div className="space-y-2.5">
+                  {group.meetings.map((m: any) => {
+                    const sentiment = m.internal_notes?.[0]?.payload?.overall_satisfaction;
+                    const sentimentStyle =
+                      sentiment === "positive" ? "bg-good-soft text-good" :
+                      sentiment === "unhappy" ? "bg-warn-soft text-warn" :
+                      "bg-brass-soft text-brass";
+                    return (
+                      <Link key={m.id} href={`/dashboard/meetings/${m.id}`}
+                        className="flex items-center justify-between bg-surface border border-border rounded-lg px-5 py-3.5 card-shadow card-shadow-hover transition group">
+                        <p className="font-mono text-xs text-ink-muted flex items-center gap-1.5">
+                          <Clock3 size={11} />
+                          {new Date(m.created_at).toLocaleDateString()} · {m.status}
+                        </p>
+                        {sentiment && (
+                          <span className={`font-mono text-xs px-2.5 py-1 rounded-full ${sentimentStyle}`}>
+                            {sentiment}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="space-y-2.5">
-                {group.meetings.map((m: any) => {
-                  const sentiment = m.internal_notes?.[0]?.payload?.overall_satisfaction;
-                  const sentimentStyle =
-                    sentiment === "positive" ? "bg-good-soft text-good" :
-                    sentiment === "unhappy" ? "bg-warn-soft text-warn" :
-                    "bg-brass-soft text-brass";
-                  return (
-                    <Link key={m.id} href={`/dashboard/meetings/${m.id}`}
-                      className="flex items-center justify-between bg-surface border border-border rounded-lg px-5 py-3.5 card-shadow card-shadow-hover transition group">
-                      <p className="font-mono text-xs text-ink-muted flex items-center gap-1.5">
-                        <Clock3 size={11} />
-                        {new Date(m.created_at).toLocaleDateString()} · {m.status}
-                      </p>
-                      {sentiment && (
-                        <span className={`font-mono text-xs px-2.5 py-1 rounded-full ${sentimentStyle}`}>
-                          {sentiment}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </main>
     </div>
