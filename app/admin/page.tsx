@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { Building2, Users } from "lucide-react";
+import { Building2, Users, ArrowLeft } from "lucide-react";
 
 export default function AdminPage() {
   const [firmName, setFirmName] = useState("");
@@ -21,6 +21,10 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-paper flex items-start justify-center px-6 py-16">
       <div className="max-w-sm w-full space-y-6">
+        <Link href="/dashboard" className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-teal transition">
+          <ArrowLeft size={13} /> Back to my dashboard
+        </Link>
+
         <p className="font-display text-xl text-ink text-center">AdvisorOS Admin</p>
 
         <div className="bg-surface border border-border rounded-xl p-6 card-shadow">
