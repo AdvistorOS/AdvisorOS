@@ -1,10 +1,19 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Mic, Square, UploadCloud, FileAudio, Loader2, RotateCw } from "lucide-react";
 import Link from "next/link";
 import { withRetry } from "@/lib/retry";
+import { useToast } from "../ToastProvider";
+
+function pickSupportedMimeType() {
+  const preferred = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"];
+  for (const type of preferred) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(type)) return type;
+  }
+  return "";
+}
 
 export default function RecordPage() {
   const [clientName, setClientName] = useState("");
@@ -21,18 +30,41 @@ export default function RecordPage() {
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mimeTypeRef = useRef<string>("");
   const supabase = createClient();
   const router = useRouter();
+  const toast = useToast();
+
+  // Warn before closing the tab or reloading while actively recording
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (recording) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [recording]);
+
+  function handleBackClick(e: React.MouseEvent) {
+    if (recording) {
+      const ok = confirm("You're still recording — leaving now will lose this recording. Continue?");
+      if (!ok) e.preventDefault();
+    }
+  }
 
   async function startRecording() {
     setStatus("");
     setFile(null);
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     chunks.current = [];
-    const mr = new MediaRecorder(stream);
+    const mimeType = pickSupportedMimeType();
+    mimeTypeRef.current = mimeType;
+    const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
     mr.ondataavailable = (e) => chunks.current.push(e.data);
     mr.onstop = () => {
-      const blob = new Blob(chunks.current, { type: "audio/webm" });
+      const blob = new Blob(chunks.current, { type: mimeType || "audio/webm" });
       setAudioBlob(blob);
       setAudioUrl(URL.createObjectURL(blob));
       stream.getTracks().forEach((t) => t.stop());
@@ -62,6 +94,12 @@ export default function RecordPage() {
     setAudioUrl("");
   }
 
+  function extForMime(mime: string) {
+    if (mime.includes("mp4")) return "m4a";
+    if (mime.includes("webm")) return "webm";
+    return "audio";
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const sourceBlob: Blob | File | null = audioBlob ?? file;
@@ -84,7 +122,7 @@ export default function RecordPage() {
       if (clientErr) { setStatus("Client insert error: " + clientErr.message); setLoading(false); setFailed(true); return; }
 
       setStatus(audioBlob ? "Uploading recording..." : "Uploading file...");
-      const fileName = file ? file.name : "recording.webm";
+      const fileName = file ? file.name : `recording.${extForMime(mimeTypeRef.current)}`;
       const filePath = `${client.id}/${Date.now()}-${fileName}`;
 
       let progressTimer = setInterval(() => {
@@ -123,17 +161,19 @@ export default function RecordPage() {
         .single();
       if (meetingErr) { setStatus("Meeting insert error: " + meetingErr.message); setLoading(false); setFailed(true); return; }
 
-      setStatus("Processing (transcription + AI, ~1 min)...");
+      setStatus("Processing (transcription + AI — can take a few minutes for longer recordings)...");
       const res = await fetch("/api/process-meeting", {
         method: "POST",
         body: JSON.stringify({ meetingId: meeting.id }),
       });
 
       if (res.ok) {
+        toast(`${clientName}'s meeting is ready`);
         router.push(`/dashboard/meetings/${meeting.id}`);
       } else {
         const body = await res.text();
         setStatus("Processing failed: " + body);
+        toast("Processing failed", "error");
         setLoading(false);
         setFailed(true);
       }
@@ -148,7 +188,7 @@ export default function RecordPage() {
 
   return (
     <main className="max-w-md mx-auto px-8 py-16">
-      <Link href="/dashboard" className="text-ink-muted hover:text-teal transition inline-flex items-center gap-1.5 text-sm mb-6">
+      <Link href="/dashboard" onClick={handleBackClick} className="text-ink-muted hover:text-teal transition inline-flex items-center gap-1.5 text-sm mb-6">
         <ArrowLeft size={16} /> Back
       </Link>
 
