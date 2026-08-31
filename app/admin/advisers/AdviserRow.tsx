@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { UserMinus } from "lucide-react";
+import { UserMinus, Trash2, X } from "lucide-react";
 
 type Firm = { id: string; name: string };
 type Adviser = { id: string; full_name: string; email: string; firm_id: string | null };
@@ -10,8 +10,11 @@ export function AdviserRow({ adviser, firms }: { adviser: Adviser; firms: Firm[]
   const router = useRouter();
   const [firmId, setFirmId] = useState(adviser.firm_id ?? "");
   const [saving, setSaving] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [permDeleteModal, setPermDeleteModal] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   async function handleFirmChange(newFirmId: string) {
     setFirmId(newFirmId);
@@ -32,39 +35,83 @@ export function AdviserRow({ adviser, firms }: { adviser: Adviser; firms: Firm[]
     });
     if (res.ok) router.refresh();
     setRemoving(false);
-    setConfirming(false);
+    setConfirmingRemove(false);
+  }
+
+  async function handlePermanentDelete() {
+    setDeleting(true);
+    const res = await fetch("/api/admin/permanently-delete-adviser", {
+      method: "POST",
+      body: JSON.stringify({ adviserId: adviser.id }),
+    });
+    if (res.ok) router.refresh();
+    setDeleting(false);
+    setPermDeleteModal(false);
+    setConfirmText("");
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 bg-surface border border-border rounded-lg px-4 py-3 card-shadow">
-      <div className="min-w-0 flex-shrink-0">
-        <p className="text-sm text-ink truncate">{adviser.full_name}</p>
-        <p className="text-xs text-ink-muted truncate">{adviser.email}</p>
+    <>
+      <div className="flex items-center justify-between gap-3 bg-surface border border-border rounded-lg px-4 py-3 card-shadow">
+        <div className="min-w-0 flex-shrink-0">
+          <p className="text-sm text-ink truncate">{adviser.full_name}</p>
+          <p className="text-xs text-ink-muted truncate">{adviser.email}</p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <select value={firmId} onChange={(e) => handleFirmChange(e.target.value)} disabled={saving}
+            className="border border-border rounded-md px-2 py-1.5 text-xs bg-paper text-ink focus:outline-none focus:border-teal disabled:opacity-50">
+            <option value="">No firm</option>
+            {firms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+
+          {confirmingRemove ? (
+            <div className="flex items-center gap-1.5">
+              <button onClick={handleRemove} disabled={removing}
+                className="text-xs bg-warn text-paper px-2.5 py-1.5 rounded-md hover:opacity-90 transition disabled:opacity-50">
+                {removing ? "…" : "Confirm"}
+              </button>
+              <button onClick={() => setConfirmingRemove(false)} className="text-xs text-ink-muted px-2 py-1.5">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <>
+              <button onClick={() => setConfirmingRemove(true)} title="Remove access (keeps their data)"
+                className="text-warn hover:opacity-70 transition p-1.5">
+                <UserMinus size={14} />
+              </button>
+              <button onClick={() => setPermDeleteModal(true)} title="Permanently delete everything"
+                className="text-ink-muted hover:text-warn transition p-1.5">
+                <Trash2 size={14} />
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <select value={firmId} onChange={(e) => handleFirmChange(e.target.value)} disabled={saving}
-          className="border border-border rounded-md px-2 py-1.5 text-xs bg-paper text-ink focus:outline-none focus:border-teal disabled:opacity-50">
-          <option value="">No firm</option>
-          {firms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-        </select>
-
-        {confirming ? (
-          <div className="flex items-center gap-1.5">
-            <button onClick={handleRemove} disabled={removing}
-              className="text-xs bg-warn text-paper px-2.5 py-1.5 rounded-md hover:opacity-90 transition disabled:opacity-50">
-              {removing ? "…" : "Confirm"}
-            </button>
-            <button onClick={() => setConfirming(false)} className="text-xs text-ink-muted px-2 py-1.5">
-              Cancel
+      {permDeleteModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-6"
+          onClick={() => { setPermDeleteModal(false); setConfirmText(""); }}>
+          <div className="bg-surface border border-warn/40 rounded-xl p-6 card-shadow max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-display text-lg text-warn">Permanently delete</p>
+              <button onClick={() => { setPermDeleteModal(false); setConfirmText(""); }}><X size={18} className="text-ink-muted" /></button>
+            </div>
+            <p className="text-sm text-ink mb-1">
+              This will permanently delete <span className="font-medium">{adviser.full_name}</span> and every client, meeting, transcript, and note they own.
+            </p>
+            <p className="text-xs text-warn mb-4">This cannot be undone. Client data is destroyed, not just access revoked.</p>
+            <p className="text-xs text-ink-muted mb-1.5">Type <span className="font-mono font-medium">{adviser.full_name}</span> to confirm:</p>
+            <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
+              className="border border-warn/40 rounded-md px-3 py-2 w-full bg-paper text-ink text-sm mb-4 focus:outline-none focus:border-warn" />
+            <button onClick={handlePermanentDelete} disabled={confirmText !== adviser.full_name || deleting}
+              className="bg-warn text-paper text-sm font-medium rounded-md px-4 py-2.5 w-full hover:opacity-90 transition disabled:opacity-40">
+              {deleting ? "Deleting…" : "Permanently delete"}
             </button>
           </div>
-        ) : (
-          <button onClick={() => setConfirming(true)} className="text-warn hover:opacity-70 transition p-1.5">
-            <UserMinus size={14} />
-          </button>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </>
   );
 }
