@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { FileAudio, FileText, Upload, X } from "lucide-react";
+import { LoadingDots } from "../LoadingDots";
 
 export default function FilesPage() {
   const supabase = createClient();
@@ -64,7 +65,7 @@ export default function FilesPage() {
         </button>
       </div>
 
-      {meetings === null && <p className="text-sm text-ink-muted">Loading…</p>}
+      {meetings === null && <LoadingDots label="Loading files…" />}
       {meetings !== null && !meetings.length && <p className="text-sm text-ink-muted">No files yet.</p>}
 
       <div className="space-y-2.5">

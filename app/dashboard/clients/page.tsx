@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { User, Plus, X } from "lucide-react";
+import { LoadingDots } from "../LoadingDots";
 
 export default function ClientsPage() {
   const supabase = createClient();
@@ -53,7 +54,7 @@ export default function ClientsPage() {
         </button>
       </div>
 
-      {clients === null && <p className="text-sm text-ink-muted">Loading…</p>}
+      {clients === null && <LoadingDots label="Loading clients…" />}
       {clients !== null && !clients.length && <p className="text-sm text-ink-muted">No clients yet.</p>}
 
       <div className="grid md:grid-cols-2 gap-3">
