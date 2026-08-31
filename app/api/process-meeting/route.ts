@@ -19,7 +19,6 @@ export async function POST(req: Request) {
       return Response.json({ step: "fetch meeting", error: meetingFetchErr?.message ?? "not found" }, { status: 500 });
     }
 
-    // Pull everything already known about this client from prior approved meetings
     const { data: existingFacts } = await supabaseAdmin
       .from("client_facts")
       .select("category, data")
@@ -83,14 +82,20 @@ nothing else, no markdown fences:
       "value": "Human-readable value, e.g. '£110,000' — never raw numbers or field codes",
       "evidence": "A short paraphrase of what the client actually said that supports this",
       "confidence": "high | medium | low",
-      "change_note": "Only include this key if this contradicts or updates something already known — e.g. 'Previously £95,000' — omit entirely if this is new or unchanged information"
+      "change_note": "Only include this key if this contradicts or updates something already known — omit entirely if new or unchanged"
     }
   ],
   "attention_items": [
     {
-      "title": "Short name of the missing/incomplete item — only include things NOT already covered by what you already know above",
+      "title": "Short name of the missing/incomplete item — only include things NOT already covered above",
       "status": "Not established | Missing | Incomplete | Not sufficiently established",
       "description": "One sentence on what's missing and why the adviser should follow up"
+    }
+  ],
+  "life_events": [
+    {
+      "title": "Short name of a significant life event mentioned, e.g. 'Upcoming house purchase', 'Planned retirement date change', 'New grandchild', 'Job change', 'Inheritance expected'",
+      "description": "One sentence on what was said and why it matters for planning"
     }
   ],
   "action_items": [
@@ -103,9 +108,11 @@ nothing else, no markdown fences:
   }
 }
 
-Only extract fields genuinely discussed in today's transcript — do not re-list things already known
-above unless the client restated or changed them. All monetary figures are in GBP unless stated
-otherwise. Do not invent information.`,
+Only include life_events for genuinely significant, concrete events actually mentioned — not
+routine facts. A change in income alone is not a life event; a job change, house move, marriage,
+birth, inheritance, retirement date change, or health event affecting planning is. Only extract
+fields and attention_items genuinely supported by the transcript. All monetary figures are in GBP
+unless stated otherwise. Do not invent information.`,
       messages: [{ role: "user", content: transcriptText }],
     });
 

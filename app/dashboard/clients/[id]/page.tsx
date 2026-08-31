@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { ArrowLeft, Clock3, StickyNote } from "lucide-react";
+import { ArrowLeft, Clock3, StickyNote, TrendingUp } from "lucide-react";
 import { BriefCard } from "./BriefCard";
 import { DeleteClientButton } from "./DeleteClientButton";
 
@@ -8,6 +8,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   income: "Income", expenditure: "Expenditure", assets: "Assets", liabilities: "Liabilities",
   pensions: "Pensions", dependants: "Dependants", objectives: "Objectives",
   attitude_to_risk: "Attitude to risk", capacity_for_loss: "Capacity for loss", existing_products: "Existing products",
+};
+
+const CONFIDENCE_DOT: Record<string, string> = {
+  high: "bg-good", medium: "bg-brass", low: "bg-warn",
 };
 
 export default async function ClientRecord({ params }: { params: Promise<{ id: string }> }) {
@@ -19,6 +23,13 @@ export default async function ClientRecord({ params }: { params: Promise<{ id: s
   const { data: actions } = await supabase.from("actions").select("*").eq("client_id", id).eq("status", "open");
   const { data: meetings } = await supabase.from("meetings").select("id, created_at, status").eq("client_id", id).order("created_at", { ascending: false });
   const { count: noteCount } = await supabase.from("client_notes").select("*", { count: "exact", head: true }).eq("client_id", id);
+
+  // How many times has each category ever been confirmed (across all versions, including superseded)?
+  const { data: allVersions } = await supabase.from("client_facts").select("category").eq("client_id", id);
+  const confirmCounts: Record<string, number> = {};
+  for (const v of allVersions ?? []) {
+    confirmCounts[v.category] = (confirmCounts[v.category] ?? 0) + 1;
+  }
 
   const grouped: Record<string, any[]> = {};
   for (const f of clientFacts ?? []) {
@@ -66,11 +77,23 @@ export default async function ClientRecord({ params }: { params: Promise<{ id: s
         <div className="space-y-5">
           {Object.entries(grouped).map(([category, items]) => (
             <div key={category}>
-              <p className="text-xs font-mono text-brass uppercase tracking-wide mb-2">{CATEGORY_LABELS[category] ?? category}</p>
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-xs font-mono text-brass uppercase tracking-wide">{CATEGORY_LABELS[category] ?? category}</p>
+                {confirmCounts[category] > 1 && (
+                  <span className="flex items-center gap-1 text-[10px] text-good font-mono bg-good-soft px-1.5 py-0.5 rounded-full">
+                    <TrendingUp size={9} /> confirmed {confirmCounts[category]}×
+                  </span>
+                )}
+              </div>
               <div className="space-y-2">
                 {items.map((f: any) => (
                   <div key={f.id} className="bg-surface border border-border rounded-lg p-4 card-shadow">
-                    <p className="text-xs text-ink-muted">{f.data.label}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-ink-muted">{f.data.label}</p>
+                      {f.data.confidence && (
+                        <span className={`w-1.5 h-1.5 rounded-full ${CONFIDENCE_DOT[f.data.confidence] ?? "bg-ink-muted"}`} title={`${f.data.confidence} confidence`} />
+                      )}
+                    </div>
                     <p className="font-display text-lg text-ink">{f.data.value}</p>
                   </div>
                 ))}

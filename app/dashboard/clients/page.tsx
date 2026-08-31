@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { User, Plus, X } from "lucide-react";
+import { User, Plus, X, Upload } from "lucide-react";
 import { LoadingDots } from "../LoadingDots";
 import { useToast } from "../ToastProvider";
 
@@ -56,10 +56,16 @@ export default function ClientsPage() {
           <h1 className="font-display text-3xl text-ink">Clients</h1>
           <p className="text-ink-muted text-sm mt-0.5">{clients?.length ?? 0} client{clients?.length !== 1 ? "s" : ""} on file.</p>
         </div>
-        <button onClick={() => setModalOpen(true)}
-          className="bg-teal text-paper text-sm px-4 py-2.5 rounded-md hover:opacity-90 transition flex items-center gap-2 card-shadow">
-          <Plus size={16} /> New client
-        </button>
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/clients/import"
+            className="text-ink-muted text-sm px-3 py-2.5 rounded-md hover:bg-teal-soft transition flex items-center gap-1.5">
+            <Upload size={15} /> Import
+          </Link>
+          <button onClick={() => setModalOpen(true)}
+            className="bg-teal text-paper text-sm px-4 py-2.5 rounded-md hover:opacity-90 transition flex items-center gap-2 card-shadow">
+            <Plus size={16} /> New client
+          </button>
+        </div>
       </div>
 
       {clients === null && <LoadingDots label="Loading clients…" />}
