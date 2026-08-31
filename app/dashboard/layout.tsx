@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "./Sidebar";
 import { ToastProvider } from "./ToastProvider";
+import { OfflineBanner } from "./OfflineBanner";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -8,6 +9,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <ToastProvider>
+      <OfflineBanner />
       <div className="flex min-h-screen bg-paper">
         <Sidebar email={user?.email ?? ""} />
         <div className="flex-1 min-w-0">{children}</div>

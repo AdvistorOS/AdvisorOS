@@ -2,8 +2,9 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, UploadCloud, FileAudio } from "lucide-react";
+import { ArrowLeft, UploadCloud, FileAudio, RotateCw } from "lucide-react";
 import Link from "next/link";
+import { withRetry } from "@/lib/retry";
 
 export default function UploadPage() {
   const [clientName, setClientName] = useState("");
@@ -11,6 +12,7 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const supabase = createClient();
   const router = useRouter();
 
@@ -18,11 +20,12 @@ export default function UploadPage() {
     e.preventDefault();
     if (!file) return;
     setLoading(true);
+    setFailed(false);
 
     try {
       setStatus("Getting user...");
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
-      if (userErr || !user) { setStatus("Auth error: " + (userErr?.message ?? "no user")); setLoading(false); return; }
+      if (userErr || !user) { setStatus("Auth error: " + (userErr?.message ?? "no user")); setLoading(false); setFailed(true); return; }
 
       setStatus("Creating client record...");
       const { data: client, error: clientErr } = await supabase
@@ -30,18 +33,30 @@ export default function UploadPage() {
         .insert({ full_name: clientName, email: clientEmail.trim() || null, adviser_id: user.id })
         .select()
         .single();
-      if (clientErr) { setStatus("Client insert error: " + clientErr.message); setLoading(false); return; }
+      if (clientErr) { setStatus("Client insert error: " + clientErr.message); setLoading(false); setFailed(true); return; }
 
       setStatus("Uploading file...");
       const filePath = `${client.id}/${Date.now()}-${file.name}`;
-      const { error: uploadErr } = await supabase.storage.from("recordings").upload(filePath, file);
-      if (uploadErr) { setStatus("Storage upload error: " + uploadErr.message); setLoading(false); return; }
+      try {
+        await withRetry(
+          async () => {
+            const { error } = await supabase.storage.from("recordings").upload(filePath, file);
+            if (error) throw error;
+          },
+          { retries: 3, onRetry: (attempt) => setStatus(`Connection issue — retrying upload (attempt ${attempt + 1} of 3)...`) }
+        );
+      } catch (uploadErr: any) {
+        setStatus("Upload failed after retries: " + uploadErr.message + " — check your connection and try again.");
+        setLoading(false);
+        setFailed(true);
+        return;
+      }
 
       setStatus("Generating access link...");
       const { data: signedData, error: signErr } = await supabase.storage
         .from("recordings")
         .createSignedUrl(filePath, 3600);
-      if (signErr || !signedData) { setStatus("Signed URL error: " + (signErr?.message ?? "unknown")); setLoading(false); return; }
+      if (signErr || !signedData) { setStatus("Signed URL error: " + (signErr?.message ?? "unknown")); setLoading(false); setFailed(true); return; }
 
       setStatus("Creating meeting record...");
       const { data: meeting, error: meetingErr } = await supabase
@@ -49,7 +64,7 @@ export default function UploadPage() {
         .insert({ client_id: client.id, adviser_id: user.id, media_url: signedData.signedUrl })
         .select()
         .single();
-      if (meetingErr) { setStatus("Meeting insert error: " + meetingErr.message); setLoading(false); return; }
+      if (meetingErr) { setStatus("Meeting insert error: " + meetingErr.message); setLoading(false); setFailed(true); return; }
 
       setStatus("Processing (transcription + AI, ~1 min)...");
       const res = await fetch("/api/process-meeting", {
@@ -63,10 +78,12 @@ export default function UploadPage() {
         const body = await res.text();
         setStatus("Processing failed: " + body);
         setLoading(false);
+        setFailed(true);
       }
     } catch (err: any) {
       setStatus("Unexpected error: " + err.message);
       setLoading(false);
+      setFailed(true);
     }
   }
 
@@ -99,8 +116,9 @@ export default function UploadPage() {
           </label>
 
           <button type="submit" disabled={loading}
-            className="bg-teal text-paper text-sm font-medium rounded-md px-3 py-2.5 w-full hover:opacity-90 transition disabled:opacity-50 mt-2">
-            {loading ? "Processing…" : "Upload & process"}
+            className="bg-teal text-paper text-sm font-medium rounded-md px-3 py-2.5 w-full hover:opacity-90 transition disabled:opacity-50 mt-2 flex items-center justify-center gap-2">
+            {failed && <RotateCw size={14} />}
+            {loading ? "Processing…" : failed ? "Retry upload" : "Upload & process"}
           </button>
           {status && <p className="font-mono text-xs text-ink-muted break-all pt-1">{status}</p>}
         </form>
