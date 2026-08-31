@@ -2,11 +2,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
+import { useToast } from "@/app/dashboard/ToastProvider";
 
 export function DeleteButton({ meetingId }: { meetingId: string }) {
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const toast = useToast();
 
   async function handleDelete() {
     setLoading(true);
@@ -15,8 +17,10 @@ export function DeleteButton({ meetingId }: { meetingId: string }) {
       body: JSON.stringify({ meetingId }),
     });
     if (res.ok) {
-      router.push("/dashboard");
+      toast("Meeting deleted");
+      router.push("/dashboard/meetings");
     } else {
+      toast("Could not delete meeting", "error");
       setLoading(false);
     }
   }

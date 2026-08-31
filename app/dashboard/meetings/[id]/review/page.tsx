@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { LoadingDots } from "@/app/dashboard/LoadingDots";
 import { ArrowLeft, CheckCircle2, XCircle, Edit3, Check, AlertTriangle, Eye, EyeOff, RefreshCw } from "lucide-react";
 
 type Field = { key: string; category: string; label: string; value: string; evidence: string; confidence: "high" | "medium" | "low"; change_note?: string };
@@ -115,7 +116,7 @@ export default function ReviewPage() {
     );
   }
 
-  if (loading) return <div className="min-h-screen bg-paper flex items-center justify-center text-ink-muted text-sm">Loading…</div>;
+  if (loading) return <div className="min-h-screen bg-paper"><LoadingDots label="Loading meeting…" /></div>;
 
   const attentionItems = facts?.payload?.attention_items ?? [];
 

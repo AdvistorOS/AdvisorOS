@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 const NAV = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
   { label: "Search", href: "/dashboard/search", icon: Search },
   { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
   { label: "Meetings", href: "/dashboard/meetings", icon: Calendar },
@@ -31,6 +31,11 @@ export function Sidebar({ email }: { email: string }) {
     router.push("/login");
   }
 
+  function isActive(item: typeof NAV[number]) {
+    if (item.exact) return pathname === item.href;
+    return pathname === item.href || pathname.startsWith(item.href + "/");
+  }
+
   const content = (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2.5 px-5 py-5">
@@ -40,7 +45,7 @@ export function Sidebar({ email }: { email: string }) {
 
       <nav className="flex-1 px-3 space-y-0.5">
         {NAV.map((item) => {
-          const active = pathname === item.href;
+          const active = isActive(item);
           const Icon = item.icon;
           return (
             <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)}

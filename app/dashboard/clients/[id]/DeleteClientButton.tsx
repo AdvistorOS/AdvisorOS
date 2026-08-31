@@ -2,11 +2,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
+import { useToast } from "@/app/dashboard/ToastProvider";
 
 export function DeleteClientButton({ clientId }: { clientId: string }) {
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const toast = useToast();
 
   async function handleDelete() {
     setLoading(true);
@@ -15,8 +17,10 @@ export function DeleteClientButton({ clientId }: { clientId: string }) {
       body: JSON.stringify({ clientId }),
     });
     if (res.ok) {
+      toast("Client deleted");
       router.push("/dashboard/clients");
     } else {
+      toast("Could not delete client", "error");
       setLoading(false);
     }
   }
