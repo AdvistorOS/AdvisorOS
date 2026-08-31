@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { ArrowLeft, Clock3 } from "lucide-react";
+import { ArrowLeft, Clock3, StickyNote } from "lucide-react";
 import { BriefCard } from "./BriefCard";
 import { DeleteClientButton } from "./DeleteClientButton";
 
@@ -18,6 +18,7 @@ export default async function ClientRecord({ params }: { params: Promise<{ id: s
   const { data: clientFacts } = await supabase.from("client_facts").select("*").eq("client_id", id).is("superseded_by", null);
   const { data: actions } = await supabase.from("actions").select("*").eq("client_id", id).eq("status", "open");
   const { data: meetings } = await supabase.from("meetings").select("id, created_at, status").eq("client_id", id).order("created_at", { ascending: false });
+  const { count: noteCount } = await supabase.from("client_notes").select("*", { count: "exact", head: true }).eq("client_id", id);
 
   const grouped: Record<string, any[]> = {};
   for (const f of clientFacts ?? []) {
@@ -34,7 +35,14 @@ export default async function ClientRecord({ params }: { params: Promise<{ id: s
         <DeleteClientButton clientId={id} />
       </div>
 
-      <h1 className="font-display text-3xl text-ink">{client?.full_name}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="font-display text-3xl text-ink">{client?.full_name}</h1>
+        <Link href={`/dashboard/clients/${id}/notes`}
+          className="flex items-center gap-1.5 bg-surface border border-border rounded-md px-3.5 py-2 text-xs text-ink hover:bg-teal-soft hover:border-teal transition card-shadow">
+          <StickyNote size={13} className="text-teal" />
+          Notes {noteCount ? `(${noteCount})` : ""}
+        </Link>
+      </div>
 
       <BriefCard clientId={id} />
 
