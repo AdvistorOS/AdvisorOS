@@ -2,11 +2,13 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { Circle, ChevronRight, ChevronDown } from "lucide-react";
+import { Circle, ChevronRight, ChevronDown, CheckSquare } from "lucide-react";
 import { LoadingDots } from "../LoadingDots";
+import { useToast } from "../ToastProvider";
 
 export default function TasksPage() {
   const supabase = createClient();
+  const toast = useToast();
   const [actions, setActions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -25,7 +27,8 @@ export default function TasksPage() {
   async function complete(id: string) {
     setActions((prev) => prev.filter((a) => a.id !== id));
     const { error } = await supabase.from("actions").update({ status: "done" }).eq("id", id);
-    if (error) setError(error.message);
+    if (error) { setError(error.message); toast(error.message, "error"); }
+    else toast("Task completed");
   }
 
   function toggle(clientId: string) {
@@ -58,7 +61,12 @@ export default function TasksPage() {
         </div>
       )}
 
-      {!error && groups.length === 0 && <p className="text-sm text-ink-muted">Nothing outstanding.</p>}
+      {!error && groups.length === 0 && (
+        <div className="border border-dashed border-border rounded-xl py-16 text-center">
+          <CheckSquare size={22} className="text-ink-muted mx-auto mb-3" />
+          <p className="text-sm text-ink-muted">Nothing outstanding — you're all caught up.</p>
+        </div>
+      )}
 
       <div className="space-y-2.5">
         {groups.map(([clientId, group]) => {

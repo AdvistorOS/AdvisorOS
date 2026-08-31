@@ -1,24 +1,31 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { User, Plus, X } from "lucide-react";
 import { LoadingDots } from "../LoadingDots";
+import { useToast } from "../ToastProvider";
 
 export default function ClientsPage() {
   const supabase = createClient();
+  const toast = useToast();
   const [clients, setClients] = useState<any[] | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     const { data } = await supabase.from("clients").select("*").order("full_name");
     setClients(data ?? []);
   }
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (modalOpen) setTimeout(() => nameInputRef.current?.focus(), 50);
+  }, [modalOpen]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -32,10 +39,11 @@ export default function ClientsPage() {
       email: email.trim() || null,
       adviser_id: user.id,
     });
-    if (error) { setError(error.message); setSaving(false); return; }
+    if (error) { setError(error.message); toast(error.message, "error"); setSaving(false); return; }
 
     setSaving(false);
     setModalOpen(false);
+    toast(`${name} added`);
     setName("");
     setEmail("");
     load();
@@ -55,7 +63,12 @@ export default function ClientsPage() {
       </div>
 
       {clients === null && <LoadingDots label="Loading clients…" />}
-      {clients !== null && !clients.length && <p className="text-sm text-ink-muted">No clients yet.</p>}
+      {clients !== null && !clients.length && (
+        <div className="border border-dashed border-border rounded-xl py-16 text-center">
+          <User size={22} className="text-ink-muted mx-auto mb-3" />
+          <p className="text-sm text-ink-muted">No clients yet — add your first one above.</p>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-3">
         {clients?.map((c) => (
@@ -77,7 +90,7 @@ export default function ClientsPage() {
               <button onClick={() => setModalOpen(false)}><X size={18} className="text-ink-muted" /></button>
             </div>
             <form onSubmit={handleCreate} className="space-y-3">
-              <input placeholder="Client name" required value={name} onChange={(e) => setName(e.target.value)}
+              <input ref={nameInputRef} placeholder="Client name" required value={name} onChange={(e) => setName(e.target.value)}
                 className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal" />
               <input placeholder="Client email (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal" />
