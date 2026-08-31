@@ -1,12 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { ArrowLeft, UserPlus, UserMinus, Copy, Check } from "lucide-react";
+import { ArrowLeft, UserPlus, UserMinus, Copy, Check, Trash2 } from "lucide-react";
 
 export default function FirmDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const supabase = createClient();
   const [firm, setFirm] = useState<any>(null);
   const [advisers, setAdvisers] = useState<any[] | null>(null);
@@ -16,6 +17,8 @@ export default function FirmDetailPage() {
   const [result, setResult] = useState<{ email: string; password: string; emailSent: boolean } | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function load() {
     const { data: f } = await supabase.from("firms").select("*").eq("id", id).single();
@@ -55,6 +58,19 @@ export default function FirmDetailPage() {
     if (res.ok) load();
   }
 
+  async function handleDeleteFirm() {
+    setDeleting(true);
+    const res = await fetch("/api/admin/delete-firm", {
+      method: "POST",
+      body: JSON.stringify({ firmId: id }),
+    });
+    if (res.ok) {
+      router.push("/admin/firms");
+    } else {
+      setDeleting(false);
+    }
+  }
+
   function copyCredentials() {
     if (!result) return;
     navigator.clipboard.writeText(`Login: https://advisor-os-fawn.vercel.app\nEmail: ${result.email}\nPassword: ${result.password}`);
@@ -65,9 +81,29 @@ export default function FirmDetailPage() {
   return (
     <div className="min-h-screen bg-paper px-6 py-16">
       <div className="max-w-lg mx-auto space-y-6">
-        <Link href="/admin/firms" className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-teal transition">
-          <ArrowLeft size={13} /> Firms
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link href="/admin/firms" className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-teal transition">
+            <ArrowLeft size={13} /> Firms
+          </Link>
+          {!confirmingDelete ? (
+            <button onClick={() => setConfirmingDelete(true)}
+              className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-warn transition">
+              <Trash2 size={13} /> Delete firm
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-warn">Delete this firm?</span>
+              <button onClick={handleDeleteFirm} disabled={deleting}
+                className="text-xs bg-warn text-paper px-2.5 py-1 rounded-md hover:opacity-90 transition disabled:opacity-50">
+                {deleting ? "Deleting…" : "Confirm"}
+              </button>
+              <button onClick={() => setConfirmingDelete(false)}
+                className="text-xs text-ink-muted px-2.5 py-1 rounded-md hover:bg-border transition">
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
 
         <p className="font-display text-2xl text-ink text-center">{firm?.name ?? "…"}</p>
 
