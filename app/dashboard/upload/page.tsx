@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, UploadCloud, FileAudio, RotateCw } from "lucide-react";
+import { ArrowLeft, UploadCloud, FileAudio, RotateCw, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { withRetry } from "@/lib/retry";
 
@@ -11,6 +11,7 @@ export default function UploadPage() {
   const [clientEmail, setClientEmail] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState("");
+  const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const supabase = createClient();
@@ -21,6 +22,7 @@ export default function UploadPage() {
     if (!file) return;
     setLoading(true);
     setFailed(false);
+    setProgress(0);
 
     try {
       setStatus("Getting user...");
@@ -37,6 +39,14 @@ export default function UploadPage() {
 
       setStatus("Uploading file...");
       const filePath = `${client.id}/${Date.now()}-${file.name}`;
+
+      // Simulated smooth progress while the actual upload runs — Supabase's
+      // client SDK doesn't expose real byte-level progress, so this keeps
+      // something visibly moving rather than sitting static during upload.
+      let progressTimer = setInterval(() => {
+        setProgress((p) => (p < 90 ? p + Math.random() * 8 : p));
+      }, 300);
+
       try {
         await withRetry(
           async () => {
@@ -46,11 +56,14 @@ export default function UploadPage() {
           { retries: 3, onRetry: (attempt) => setStatus(`Connection issue — retrying upload (attempt ${attempt + 1} of 3)...`) }
         );
       } catch (uploadErr: any) {
+        clearInterval(progressTimer);
         setStatus("Upload failed after retries: " + uploadErr.message + " — check your connection and try again.");
         setLoading(false);
         setFailed(true);
         return;
       }
+      clearInterval(progressTimer);
+      setProgress(100);
 
       setStatus("Generating access link...");
       const { data: signedData, error: signErr } = await supabase.storage
@@ -101,26 +114,40 @@ export default function UploadPage() {
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <input placeholder="Client name" required value={clientName}
-            onChange={(e) => setClientName(e.target.value)}
-            className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal focus:ring-1 focus:ring-teal transition" />
+            onChange={(e) => setClientName(e.target.value)} disabled={loading}
+            className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal focus:ring-1 focus:ring-teal transition disabled:opacity-60" />
           <input placeholder="Client email (optional)" type="email" value={clientEmail}
-            onChange={(e) => setClientEmail(e.target.value)}
-            className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal focus:ring-1 focus:ring-teal transition" />
+            onChange={(e) => setClientEmail(e.target.value)} disabled={loading}
+            className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal focus:ring-1 focus:ring-teal transition disabled:opacity-60" />
 
-          <label className="flex items-center gap-3 border border-dashed border-border rounded-md px-3.5 py-3 cursor-pointer hover:border-teal transition">
+          <label className={`flex items-center gap-3 border border-dashed border-border rounded-md px-3.5 py-3 transition
+            ${loading ? "opacity-60" : "cursor-pointer hover:border-teal"}`}>
             <FileAudio size={18} className="text-ink-muted flex-shrink-0" />
             <span className="text-sm text-ink-muted truncate">{file ? file.name : "Choose an audio or video file"}</span>
-            <input type="file" accept="audio/*,video/*" required
+            <input type="file" accept="audio/*,video/*" required disabled={loading}
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               className="hidden" />
           </label>
 
           <button type="submit" disabled={loading}
-            className="bg-teal text-paper text-sm font-medium rounded-md px-3 py-2.5 w-full hover:opacity-90 transition disabled:opacity-50 mt-2 flex items-center justify-center gap-2">
-            {failed && <RotateCw size={14} />}
+            className="bg-teal text-paper text-sm font-medium rounded-md px-3 py-2.5 w-full hover:opacity-90 transition disabled:opacity-90 mt-2 flex items-center justify-center gap-2">
+            {loading && <Loader2 size={15} className="animate-spin" />}
+            {failed && !loading && <RotateCw size={14} />}
             {loading ? "Processing…" : failed ? "Retry upload" : "Upload & process"}
           </button>
-          {status && <p className="font-mono text-xs text-ink-muted break-all pt-1">{status}</p>}
+
+          {loading && progress > 0 && progress < 100 && (
+            <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
+              <div className="h-full bg-teal transition-all duration-300 ease-out" style={{ width: `${Math.min(progress, 95)}%` }} />
+            </div>
+          )}
+
+          {status && (
+            <p className="font-mono text-xs text-ink-muted break-all pt-1 flex items-start gap-1.5">
+              {loading && <Loader2 size={11} className="animate-spin flex-shrink-0 mt-0.5" />}
+              <span>{status}</span>
+            </p>
+          )}
         </form>
       </div>
     </main>
