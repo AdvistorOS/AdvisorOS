@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { Building2 } from "lucide-react";
+import { Building2, Users } from "lucide-react";
 
 export default function AdminPage() {
   const [firmName, setFirmName] = useState("");
@@ -38,7 +38,12 @@ export default function AdminPage() {
 
         <Link href="/admin/firms"
           className="block text-center bg-surface border border-border rounded-xl p-4 text-sm text-ink hover:bg-teal-soft transition card-shadow">
-          Manage existing firms →
+          Manage firms →
+        </Link>
+
+        <Link href="/admin/advisers"
+          className="flex items-center justify-center gap-2 bg-surface border border-border rounded-xl p-4 text-sm text-ink hover:bg-teal-soft transition card-shadow">
+          <Users size={15} /> All advisers →
         </Link>
       </div>
     </div>
