@@ -4,6 +4,7 @@ import { ArrowLeft, FileText, ShieldAlert, ListChecks, ClipboardCheck } from "lu
 import { DeleteButton } from "./DeleteButton";
 import { MoveMeetingButton } from "./MoveMeetingButton";
 import { RetryButton } from "./RetryButton";
+import { AutoRefresh } from "./AutoRefresh";
 
 export default async function MeetingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -43,6 +44,7 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
         </section>
       )}
 
+      {isProcessing && <AutoRefresh />}
       {isProcessing && (
         <section className="bg-teal-soft border border-teal/20 rounded-xl p-6">
           <p className="text-sm text-ink">Processing — {meeting.status === "transcribing" ? "creating transcript…" : "extracting information…"}</p>
