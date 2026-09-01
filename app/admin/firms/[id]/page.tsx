@@ -23,8 +23,9 @@ export default function FirmDetailPage() {
   async function load() {
     const { data: f } = await supabase.from("firms").select("*").eq("id", id).single();
     setFirm(f);
-    const { data: a } = await supabase.from("advisers").select("*").eq("firm_id", id).order("full_name");
-    setAdvisers(a ?? []);
+    const res = await fetch("/api/admin/firm-advisers", { method: "POST", body: JSON.stringify({ firmId: id }) });
+    const data = await res.json();
+    setAdvisers(res.ok ? data.advisers : []);
   }
   useEffect(() => { load(); }, [id]);
 
