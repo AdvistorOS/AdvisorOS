@@ -79,9 +79,8 @@ async function startMeetingRecording() {
   setStatus("");
   setFile(null);
   try {
-    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-
+  const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+   const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const displayAudioTracks = displayStream.getAudioTracks();
     if (displayAudioTracks.length === 0) {
       displayStream.getTracks().forEach((t) => t.stop());
