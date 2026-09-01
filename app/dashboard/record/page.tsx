@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Mic, Square, UploadCloud, FileAudio, Loader2, RotateCw } from "lucide-react";
+import { ArrowLeft, Mic, Square, UploadCloud, FileAudio, Loader2, RotateCw, Monitor } from "lucide-react";
 import Link from "next/link";
 import { withRetry } from "@/lib/retry";
 import { useToast } from "../ToastProvider";
@@ -75,7 +75,62 @@ export default function RecordPage() {
     setSeconds(0);
     timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
   }
+async function startMeetingRecording() {
+  setStatus("");
+  setFile(null);
+  try {
+    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
 
+    const displayAudioTracks = displayStream.getAudioTracks();
+    if (displayAudioTracks.length === 0) {
+      displayStream.getTracks().forEach((t) => t.stop());
+      micStream.getTracks().forEach((t) => t.stop());
+      setStatus('No meeting audio was shared — in the share dialog, make sure "Share tab audio" (or "Share system audio") is checked, then try again.');
+      return;
+    }
+
+    // We only need the audio — drop the video track immediately
+    displayStream.getVideoTracks().forEach((t) => t.stop());
+
+    const audioCtx = new AudioContext();
+    const destination = audioCtx.createMediaStreamDestination();
+    audioCtx.createMediaStreamSource(micStream).connect(destination);
+    audioCtx.createMediaStreamSource(new MediaStream(displayAudioTracks)).connect(destination);
+
+    const mixedStream = destination.stream;
+    chunks.current = [];
+    const mimeType = pickSupportedMimeType();
+    mimeTypeRef.current = mimeType;
+    const mr = mimeType ? new MediaRecorder(mixedStream, { mimeType }) : new MediaRecorder(mixedStream);
+    mr.ondataavailable = (e) => chunks.current.push(e.data);
+    mr.onstop = () => {
+      const blob = new Blob(chunks.current, { type: mimeType || "audio/webm" });
+      setAudioBlob(blob);
+      setAudioUrl(URL.createObjectURL(blob));
+      micStream.getTracks().forEach((t) => t.stop());
+      displayStream.getTracks().forEach((t) => t.stop());
+      audioCtx.close();
+    };
+
+    // If they click Chrome's own "Stop sharing" bar instead of our button
+    displayAudioTracks[0].addEventListener("ended", () => {
+      if (mediaRecorder.current && mediaRecorder.current.state !== "inactive") stopRecording();
+    });
+
+    mr.start();
+    mediaRecorder.current = mr;
+    setRecording(true);
+    setSeconds(0);
+    timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+  } catch (err: any) {
+    if (err?.name === "NotAllowedError") {
+      setStatus("Screen/tab share was cancelled — click again and choose the meeting tab to record it.");
+    } else {
+      setStatus("Couldn't start meeting recording: " + err.message);
+    }
+  }
+  }
   function stopRecording() {
     mediaRecorder.current?.stop();
     setRecording(false);
@@ -210,11 +265,23 @@ export default function RecordPage() {
 
         <div className="flex flex-col items-center gap-3 mb-5">
           {!recording && !audioUrl && (
-            <button type="button" onClick={startRecording} disabled={loading}
-              className="w-14 h-14 rounded-full bg-warn text-paper flex items-center justify-center hover:opacity-90 transition disabled:opacity-40">
-              <Mic size={20} />
-            </button>
-          )}
+  <div className="flex gap-3">
+    <button type="button" onClick={startRecording} disabled={loading}
+      className="flex flex-col items-center gap-1.5 disabled:opacity-40">
+      <span className="w-14 h-14 rounded-full bg-warn text-paper flex items-center justify-center hover:opacity-90 transition">
+        <Mic size={20} />
+      </span>
+      <span className="text-xs text-ink-muted">Mic only</span>
+    </button>
+    <button type="button" onClick={startMeetingRecording} disabled={loading}
+      className="flex flex-col items-center gap-1.5 disabled:opacity-40">
+      <span className="w-14 h-14 rounded-full bg-teal text-paper flex items-center justify-center hover:opacity-90 transition">
+        <Monitor size={20} />
+      </span>
+      <span className="text-xs text-ink-muted">Record Zoom/Teams</span>
+    </button>
+  </div>
+)}
           {recording && (
             <>
               <button type="button" onClick={stopRecording}
