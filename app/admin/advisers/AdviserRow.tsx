@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { UserMinus, Trash2, X } from "lucide-react";
+import { UserMinus, Trash2, X, UserPlus2 } from "lucide-react";
 
 type Firm = { id: string; name: string };
 type Adviser = { id: string; full_name: string; email: string; firm_id: string | null };
@@ -15,6 +15,12 @@ export function AdviserRow({ adviser, firms }: { adviser: Adviser; firms: Firm[]
   const [permDeleteModal, setPermDeleteModal] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [addClientModal, setAddClientModal] = useState(false);
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [addingClient, setAddingClient] = useState(false);
+  const [addClientError, setAddClientError] = useState("");
+  const [addedConfirm, setAddedConfirm] = useState("");
 
   async function handleFirmChange(newFirmId: string) {
     setFirmId(newFirmId);
@@ -50,6 +56,26 @@ export function AdviserRow({ adviser, firms }: { adviser: Adviser; firms: Firm[]
     setConfirmText("");
   }
 
+  async function handleAddClient(e: React.FormEvent) {
+    e.preventDefault();
+    setAddingClient(true);
+    setAddClientError("");
+    const res = await fetch("/api/admin/create-client-for-adviser", {
+      method: "POST",
+      body: JSON.stringify({ adviserId: adviser.id, name: clientName, email: clientEmail }),
+    });
+    const data = await res.json();
+    setAddingClient(false);
+    if (res.ok) {
+      setAddedConfirm(`${clientName} added`);
+      setClientName("");
+      setClientEmail("");
+      setTimeout(() => { setAddClientModal(false); setAddedConfirm(""); }, 1200);
+    } else {
+      setAddClientError(data.error);
+    }
+  }
+
   return (
     <>
       <div className="flex items-center justify-between gap-3 bg-surface border border-border rounded-lg px-4 py-3 card-shadow">
@@ -64,6 +90,11 @@ export function AdviserRow({ adviser, firms }: { adviser: Adviser; firms: Firm[]
             <option value="">No firm</option>
             {firms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
           </select>
+
+          <button onClick={() => setAddClientModal(true)} title="Add a client for this adviser"
+            className="text-teal hover:opacity-70 transition p-1.5">
+            <UserPlus2 size={14} />
+          </button>
 
           {confirmingRemove ? (
             <div className="flex items-center gap-1.5">
@@ -89,6 +120,30 @@ export function AdviserRow({ adviser, firms }: { adviser: Adviser; firms: Firm[]
           )}
         </div>
       </div>
+
+      {addClientModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-6"
+          onClick={() => { setAddClientModal(false); setClientName(""); setClientEmail(""); setAddClientError(""); }}>
+          <div className="bg-surface border border-border rounded-xl p-6 card-shadow max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-display text-lg text-ink">New client for {adviser.full_name}</p>
+              <button onClick={() => setAddClientModal(false)}><X size={18} className="text-ink-muted" /></button>
+            </div>
+            <form onSubmit={handleAddClient} className="space-y-3">
+              <input placeholder="Client name" required value={clientName} onChange={(e) => setClientName(e.target.value)}
+                className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal" />
+              <input placeholder="Client email (optional)" type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)}
+                className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal" />
+              <button type="submit" disabled={addingClient}
+                className="bg-teal text-paper text-sm font-medium rounded-md px-4 py-2.5 w-full hover:opacity-90 transition disabled:opacity-50">
+                {addingClient ? "Adding…" : "Add client"}
+              </button>
+              {addClientError && <p className="text-warn text-xs">{addClientError}</p>}
+              {addedConfirm && <p className="text-good text-xs">{addedConfirm}</p>}
+            </form>
+          </div>
+        </div>
+      )}
 
       {permDeleteModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-6"
