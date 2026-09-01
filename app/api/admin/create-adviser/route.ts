@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   if (!isAdmin) return Response.json({ error: "not authorized" }, { status: 403 });
 
   const { email, fullName, firmId } = await req.json();
-  if (!email || !firmId) return Response.json({ error: "email and firmId required" }, { status: 400 });
+  if (!email) return Response.json({ error: "email required" }, { status: 400 });
 
   const password = generatePassword();
 
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
 
   const { error: advErr } = await supabaseAdmin
     .from("advisers")
-    .upsert({ id: authUser.user.id, email, full_name: fullName || email, firm_id: firmId }, { onConflict: "id" });
+    .upsert({ id: authUser.user.id, email, full_name: fullName || email, firm_id: firmId || null }, { onConflict: "id" });
   if (advErr) return Response.json({ error: advErr.message }, { status: 500 });
 
   let emailSent = true;
