@@ -10,10 +10,12 @@ export async function POST(req: Request) {
     .from("super_admins").select("email").eq("email", user.email).maybeSingle();
   if (!isAdmin) return Response.json({ error: "not authorized" }, { status: 403 });
 
-  const { name } = await req.json();
+  const { name, practiceType } = await req.json();
   if (!name) return Response.json({ error: "firm name required" }, { status: 400 });
 
-  const { data, error } = await supabaseAdmin.from("firms").insert({ name }).select().single();
+  const { data, error } = await supabaseAdmin.from("firms")
+    .insert({ name, practice_type: practiceType || "wealth_management" })
+    .select().single();
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
   return Response.json({ firm: data });

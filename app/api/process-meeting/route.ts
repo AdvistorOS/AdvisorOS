@@ -9,15 +9,34 @@ function stripFences(text: string) {
   return text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
 }
 
+const CATEGORY_SETS: Record<string, string> = {
+  wealth_management: "income | expenditure | assets | liabilities | pensions | dependants | objectives | attitude_to_risk | capacity_for_loss | existing_products",
+  profit_consulting: "revenue | costs | margins | cash_flow | operations | team_structure | growth_objectives | competitive_position | risks_challenges",
+};
+
+const DOMAIN_CONTEXT: Record<string, string> = {
+  wealth_management: "a UK wealth management adviser having a client meeting about their personal finances, goals, and risk profile",
+  profit_consulting: "a business/profit consultant having a meeting with a client company about their revenue, costs, margins, and operational performance",
+};
+
 export async function POST(req: Request) {
   const { meetingId } = await req.json();
 
   try {
     const { data: meeting, error: meetingFetchErr } = await supabaseAdmin
-      .from("meetings").select("*, clients(*)").eq("id", meetingId).single();
+      .from("meetings").select("*, clients(*), advisers(firm_id)").eq("id", meetingId).single();
     if (meetingFetchErr || !meeting) {
       return Response.json({ step: "fetch meeting", error: meetingFetchErr?.message ?? "not found" }, { status: 500 });
     }
+
+    let practiceType = "wealth_management";
+    const firmId = (meeting as any).advisers?.firm_id;
+    if (firmId) {
+      const { data: firm } = await supabaseAdmin.from("firms").select("practice_type").eq("id", firmId).single();
+      practiceType = firm?.practice_type ?? "wealth_management";
+    }
+    const categorySet = CATEGORY_SETS[practiceType] ?? CATEGORY_SETS.wealth_management;
+    const domainContext = DOMAIN_CONTEXT[practiceType] ?? DOMAIN_CONTEXT.wealth_management;
 
     const { data: existingFacts } = await supabaseAdmin
       .from("client_facts")
@@ -65,8 +84,8 @@ export async function POST(req: Request) {
     const extractionPromise = anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 3000,
-      system: `You are assisting a UK wealth management adviser. You already know the following
-about this client from previous meetings:
+      system: `You are assisting ${domainContext}. You already know the following about this
+client from previous meetings:
 
 ${knownFactsText}
 
@@ -77,10 +96,10 @@ nothing else, no markdown fences:
   "fields": [
     {
       "key": "short_unique_slug",
-      "category": "income | expenditure | assets | liabilities | pensions | dependants | objectives | attitude_to_risk | capacity_for_loss | existing_products",
-      "label": "Human-readable label, e.g. 'Annual gross income'",
-      "value": "Human-readable value, e.g. '£110,000' — never raw numbers or field codes",
-      "evidence": "A short paraphrase of what the client actually said that supports this",
+      "category": "${categorySet}",
+      "label": "Human-readable label appropriate to the category",
+      "value": "Human-readable value — never raw numbers or field codes",
+      "evidence": "A short paraphrase of what was actually said that supports this",
       "confidence": "high | medium | low",
       "change_note": "Only include this key if this contradicts or updates something already known — omit entirely if new or unchanged"
     }
@@ -89,13 +108,13 @@ nothing else, no markdown fences:
     {
       "title": "Short name of the missing/incomplete item — only include things NOT already covered above",
       "status": "Not established | Missing | Incomplete | Not sufficiently established",
-      "description": "One sentence on what's missing and why the adviser should follow up"
+      "description": "One sentence on what's missing and why it matters"
     }
   ],
   "life_events": [
     {
-      "title": "Short name of a significant life event mentioned, e.g. 'Upcoming house purchase', 'Planned retirement date change', 'New grandchild', 'Job change', 'Inheritance expected'",
-      "description": "One sentence on what was said and why it matters for planning"
+      "title": "Short name of a significant event mentioned that affects planning",
+      "description": "One sentence on what was said and why it matters"
     }
   ],
   "action_items": [
@@ -108,11 +127,8 @@ nothing else, no markdown fences:
   }
 }
 
-Only include life_events for genuinely significant, concrete events actually mentioned — not
-routine facts. A change in income alone is not a life event; a job change, house move, marriage,
-birth, inheritance, retirement date change, or health event affecting planning is. Only extract
-fields and attention_items genuinely supported by the transcript. All monetary figures are in GBP
-unless stated otherwise. Do not invent information.`,
+Only include fields and attention_items genuinely supported by the transcript. All monetary
+figures are in GBP unless stated otherwise. Do not invent information.`,
       messages: [{ role: "user", content: transcriptText }],
     });
 

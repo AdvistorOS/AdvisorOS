@@ -8,6 +8,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   income: "Income", expenditure: "Expenditure", assets: "Assets", liabilities: "Liabilities",
   pensions: "Pensions", dependants: "Dependants", objectives: "Objectives",
   attitude_to_risk: "Attitude to risk", capacity_for_loss: "Capacity for loss", existing_products: "Existing products",
+  revenue: "Revenue", costs: "Costs", margins: "Margins", cash_flow: "Cash flow",
+  operations: "Operations", team_structure: "Team structure", growth_objectives: "Growth objectives",
+  competitive_position: "Competitive position", risks_challenges: "Risks & challenges",
 };
 
 const CONFIDENCE_DOT: Record<string, string> = {
@@ -24,7 +27,6 @@ export default async function ClientRecord({ params }: { params: Promise<{ id: s
   const { data: meetings } = await supabase.from("meetings").select("id, created_at, status").eq("client_id", id).order("created_at", { ascending: false });
   const { count: noteCount } = await supabase.from("client_notes").select("*", { count: "exact", head: true }).eq("client_id", id);
 
-  // How many times has each category ever been confirmed (across all versions, including superseded)?
   const { data: allVersions } = await supabase.from("client_facts").select("category").eq("client_id", id);
   const confirmCounts: Record<string, number> = {};
   for (const v of allVersions ?? []) {

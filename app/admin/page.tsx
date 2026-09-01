@@ -6,13 +6,17 @@ import { Building2, Users, ArrowLeft } from "lucide-react";
 
 export default function AdminPage() {
   const [firmName, setFirmName] = useState("");
+  const [practiceType, setPracticeType] = useState("wealth_management");
   const [error, setError] = useState("");
   const supabase = createClient();
 
   async function handleCreateFirm(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    const res = await fetch("/api/admin/create-firm", { method: "POST", body: JSON.stringify({ name: firmName }) });
+    const res = await fetch("/api/admin/create-firm", {
+      method: "POST",
+      body: JSON.stringify({ name: firmName, practiceType }),
+    });
     const data = await res.json();
     if (res.ok) window.location.href = `/admin/firms/${data.firm.id}`;
     else setError(data.error);
@@ -32,10 +36,15 @@ export default function AdminPage() {
             <Building2 size={15} className="text-teal" />
             <p className="font-mono text-xs text-teal uppercase tracking-widest">New firm</p>
           </div>
-          <form onSubmit={handleCreateFirm} className="flex gap-2">
+          <form onSubmit={handleCreateFirm} className="space-y-3">
             <input placeholder="Firm name" required value={firmName} onChange={(e) => setFirmName(e.target.value)}
-              className="border border-border rounded-md px-3.5 py-2.5 flex-1 bg-paper text-ink text-sm focus:outline-none focus:border-teal" />
-            <button type="submit" className="bg-teal text-paper text-sm px-4 rounded-md hover:opacity-90 transition">Create</button>
+              className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal" />
+            <select value={practiceType} onChange={(e) => setPracticeType(e.target.value)}
+              className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal">
+              <option value="wealth_management">Wealth management / financial advice</option>
+              <option value="profit_consulting">Profit / business consulting</option>
+            </select>
+            <button type="submit" className="bg-teal text-paper text-sm px-4 py-2.5 rounded-md w-full hover:opacity-90 transition">Create</button>
           </form>
           {error && <p className="text-warn text-xs mt-2">{error}</p>}
         </div>
