@@ -5,6 +5,7 @@ import { DeleteButton } from "./DeleteButton";
 import { MoveMeetingButton } from "./MoveMeetingButton";
 import { RetryButton } from "./RetryButton";
 import { AutoRefresh } from "./AutoRefresh";
+import { WhoIsWho } from "./WhoIsWho";
 
 export default async function MeetingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -77,6 +78,8 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
           {facts?.reviewed ? "View review" : "Review this meeting"}
         </Link>
       )}
+
+      {meeting?.status === "done" && <WhoIsWho meetingId={id} />}
 
       {meeting?.client_summary && (
         <section className="bg-surface border border-border rounded-xl p-7 card-shadow">
