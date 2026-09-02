@@ -19,16 +19,6 @@ const DOMAIN_CONTEXT: Record<string, string> = {
   profit_consulting: "a business/profit consultant having a meeting with a client company about their revenue, costs, margins, and operational performance",
 };
 
-async function streamToText(stream: AsyncIterable<any>) {
-  let text = "";
-  for await (const event of stream) {
-    if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
-      text += event.delta.text;
-    }
-  }
-  return text;
-}
-
 export async function POST(req: Request) {
   const { meetingId } = await req.json();
   if (!meetingId) return Response.json({ error: "meetingId required" }, { status: 400 });
@@ -66,14 +56,11 @@ export async function POST(req: Request) {
     .map((f: any) => `${f.data.label}: ${f.data.value}`).join("\n")
     || "No prior information on file — this is the first recorded meeting.";
 
-  let rawExtractionText = "";
-  let summary = "";
-
-  try {
-    const extractionStream = anthropic.messages.stream({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
-      system: `You are assisting ${domainContext}. You already know the following about this
+  // Run both in PARALLEL — total wall time is whichever is slower, not their sum.
+  const extractionPromise = anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 3000,
+    system: `You are assisting ${domainContext}. You already know the following about this
 client from previous meetings:
 
 ${knownFactsText}
@@ -86,10 +73,10 @@ nothing else, no markdown fences:
     { "key": "short_unique_slug", "category": "${categorySet}", "label": "Human-readable label", "value": "Human-readable value", "evidence": "A real, specific paraphrase of what was actually said — one clear sentence", "confidence": "high | medium | low", "change_note": "Only if this updates something already known" }
   ],
   "attention_items": [
-    { "title": "...", "status": "Not established | Missing | Incomplete | Not sufficiently established", "description": "One sentence on what's missing and why it matters" }
+    { "title": "...", "status": "Not established | Missing | Incomplete | Not sufficiently established", "description": "One sentence" }
   ],
   "life_events": [
-    { "title": "...", "description": "One sentence on what was said and why it matters" }
+    { "title": "...", "description": "One sentence" }
   ],
   "action_items": [
     { "description": "...", "owner": "adviser | client" }
@@ -101,33 +88,42 @@ nothing else, no markdown fences:
   }
 }
 
-Cover the whole conversation thoroughly — for a long, detailed meeting this can genuinely mean
-15-20 fields if that much real information was discussed. Don't pad or invent to hit a number,
-but don't artificially limit real detail either. All monetary figures are in GBP unless stated
-otherwise. Do not invent information. Output ONLY the raw JSON object, complete and valid,
-nothing else — this is critical, an incomplete response is a failure.`,
-      messages: [{ role: "user", content: transcriptText }],
-    });
-    rawExtractionText = await streamToText(extractionStream);
+Cover the conversation well, up to about 15 of the most important fields — real substance, not
+padding. All monetary figures are in GBP unless stated otherwise. Do not invent information.
+Output ONLY the raw JSON object, complete and valid, nothing else.`,
+    messages: [{ role: "user", content: transcriptText }],
+  });
 
-    const summaryStream = anthropic.messages.stream({
-      model: "claude-sonnet-4-6",
-      max_tokens: 600,
-      system: "Write a clear, plain-English summary of this meeting for the client's own records — covering the whole conversation with real substance, not padded with filler phrases or throat-clearing. Aim for dense, information-rich prose: what was discussed, what was decided, agreed next steps. Roughly 150-250 words. All monetary figures are in GBP unless stated otherwise.",
-      messages: [{ role: "user", content: transcriptText }],
-    });
-    summary = await streamToText(summaryStream);
-  } catch (e: any) {
+  const summaryPromise = anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 500,
+    system: "Write a clear, plain-English summary of this meeting for the client's own records — real substance, no filler. What was discussed, decided, agreed next steps. Roughly 150-200 words. All monetary figures are in GBP unless stated otherwise.",
+    messages: [{ role: "user", content: transcriptText }],
+  });
+
+  const [extractionResult, summaryResult] = await Promise.allSettled([extractionPromise, summaryPromise]);
+
+  if (extractionResult.status === "rejected") {
     await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
-    return Response.json({ step: "anthropic streaming", error: e.message ?? String(e) }, { status: 500 });
+    return Response.json({ step: "anthropic extraction", error: String(extractionResult.reason) }, { status: 500 });
+  }
+  if (summaryResult.status === "rejected") {
+    await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
+    return Response.json({ step: "anthropic summary", error: String(summaryResult.reason) }, { status: 500 });
+  }
+  if (extractionResult.value.stop_reason === "max_tokens") {
+    await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
+    return Response.json({ step: "extraction truncated", error: "Response cut off — try again." }, { status: 500 });
   }
 
-  let facts;
+  let facts, summary;
   try {
-    facts = JSON.parse(stripFences(rawExtractionText));
+    const rawText = extractionResult.value.content.find((b) => b.type === "text")!.text;
+    facts = JSON.parse(stripFences(rawText));
+    summary = summaryResult.value.content.find((b) => b.type === "text")!.text;
   } catch (e: any) {
     await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
-    return Response.json({ step: "parse anthropic response", error: e.message ?? String(e), raw_length: rawExtractionText.length }, { status: 500 });
+    return Response.json({ step: "parse anthropic response", error: e.message ?? String(e) }, { status: 500 });
   }
 
   try {
