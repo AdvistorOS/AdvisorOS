@@ -6,6 +6,7 @@ import { MoveMeetingButton } from "./MoveMeetingButton";
 import { RetryButton } from "./RetryButton";
 import { AutoRefresh } from "./AutoRefresh";
 import { WhoIsWho } from "./WhoIsWho";
+import { CustomAnalysis } from "./CustomAnalysis";
 
 export default async function MeetingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -80,6 +81,8 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
       )}
 
       {meeting?.status === "done" && <WhoIsWho meetingId={id} />}
+
+      {meeting?.status === "done" && <CustomAnalysis meetingId={id} />}
 
       {meeting?.client_summary && (
         <section className="bg-surface border border-border rounded-xl p-7 card-shadow">

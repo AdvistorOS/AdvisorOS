@@ -3,6 +3,8 @@ import Link from "next/link";
 import { ArrowLeft, Clock3, StickyNote, TrendingUp, Users, User } from "lucide-react";
 import { BriefCard } from "./BriefCard";
 import { DeleteClientButton } from "./DeleteClientButton";
+import { AskClientAI } from "./AskClientAI";
+import { ClientTimeline } from "./ClientTimeline";
 
 const CATEGORY_LABELS: Record<string, string> = {
   income: "Income", expenditure: "Expenditure", assets: "Assets", liabilities: "Liabilities",
@@ -59,6 +61,10 @@ export default async function ClientRecord({ params }: { params: Promise<{ id: s
       </div>
 
       <BriefCard clientId={id} />
+
+      <AskClientAI clientId={id} />
+
+      <ClientTimeline clientId={id} />
 
       {contacts && contacts.length > 0 && (
         <section>
