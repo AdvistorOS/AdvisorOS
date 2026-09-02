@@ -56,10 +56,12 @@ export async function POST(req: Request) {
     .map((f: any) => `${f.data.label}: ${f.data.value}`).join("\n")
     || "No prior information on file — this is the first recorded meeting.";
 
-  // Run both in PARALLEL — total wall time is whichever is slower, not their sum.
+  // Firm limits on output size — this is the main lever for staying inside
+  // Vercel's 60-second hard cap on the free plan. Less to generate = faster,
+  // more reliably, every time. Trades some depth for consistency.
   const extractionPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 4096,
+    max_tokens: 2048,
     system: `You are assisting ${domainContext}. You already know the following about this
 client from previous meetings:
 
@@ -70,13 +72,13 @@ nothing else, no markdown fences:
 
 {
   "fields": [
-    { "key": "short_unique_slug", "category": "${categorySet}", "label": "Human-readable label", "value": "Human-readable value", "evidence": "A real, specific paraphrase of what was actually said — one clear sentence", "confidence": "high | medium | low", "change_note": "Only if this updates something already known" }
+    { "key": "short_unique_slug", "category": "${categorySet}", "label": "Human-readable label", "value": "Human-readable value", "evidence": "Short paraphrase, under 15 words", "confidence": "high | medium | low", "change_note": "Only if this updates something already known" }
   ],
   "attention_items": [
-    { "title": "...", "status": "Not established | Missing | Incomplete | Not sufficiently established", "description": "One sentence" }
+    { "title": "...", "status": "Not established | Missing | Incomplete | Not sufficiently established", "description": "One short sentence" }
   ],
   "life_events": [
-    { "title": "...", "description": "One sentence" }
+    { "title": "...", "description": "One short sentence" }
   ],
   "action_items": [
     { "description": "...", "owner": "adviser | client" }
@@ -88,16 +90,18 @@ nothing else, no markdown fences:
   }
 }
 
-Cover the conversation well, up to about 15 of the most important fields — real substance, not
-padding. All monetary figures are in GBP unless stated otherwise. Do not invent information.
-Output ONLY the raw JSON object, complete and valid, nothing else.`,
+STRICT LIMITS, non-negotiable: maximum 8 fields, maximum 5 attention_items, maximum 3
+life_events, maximum 5 action_items. Pick only the most important items if the conversation
+covers more. Keep every text value brief. Cover the whole conversation, not just the start.
+All monetary figures are in GBP unless stated otherwise. Do not invent information. Output
+ONLY the raw JSON object, complete and valid, nothing else.`,
     messages: [{ role: "user", content: transcriptText }],
   });
 
   const summaryPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 500,
-    system: "Write a clear, plain-English summary of this meeting for the client's own records — real substance, no filler. What was discussed, decided, agreed next steps. Roughly 150-200 words. All monetary figures are in GBP unless stated otherwise.",
+    max_tokens: 400,
+    system: "Write a short, plain-English summary (4-6 sentences) of this meeting for the client's own records — real substance, no filler. What was discussed, decided, agreed next steps. All monetary figures are in GBP unless stated otherwise.",
     messages: [{ role: "user", content: transcriptText }],
   });
 
