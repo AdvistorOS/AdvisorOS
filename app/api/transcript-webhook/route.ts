@@ -98,7 +98,7 @@ export async function POST(req: Request) {
   try {
     const extraction = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 4096,
+      max_tokens: 2048,
       system: `You are assisting ${domainContext}. You already know the following about this
 client from previous meetings:
 
@@ -135,7 +135,7 @@ nothing else, no markdown fences:
   }
 }
 
-For long transcripts, cover the whole conversation, not just the beginning. Limit to the 20
+For long transcripts, cover the whole conversation, not just the beginning. Limit to the 10
 most important fields if the conversation covers a very large number of topics. Only include
 fields and attention_items genuinely supported by the transcript. All monetary figures are
 in GBP unless stated otherwise. Do not invent information.`,
@@ -152,7 +152,7 @@ in GBP unless stated otherwise. Do not invent information.`,
   try {
     const summaryResp = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 700,
+      max_tokens: 500,
       system: "Write a short, neutral, plain-English summary of this meeting for the client's own records, covering the whole conversation. Topics discussed and agreed next steps only. All monetary figures are in GBP unless stated otherwise.",
       messages: [{ role: "user", content: transcriptText }],
     });
