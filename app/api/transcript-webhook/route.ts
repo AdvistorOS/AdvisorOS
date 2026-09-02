@@ -39,15 +39,16 @@ export async function POST(req: Request) {
     return Response.json({ ok: true });
   }
 
-  // Idempotency guard: only proceed if this meeting is still waiting on transcription.
-  // A retried webhook delivery (AssemblyAI retries if we don't ack fast enough)
-  // will see status already advanced and skip re-processing.
   const { data: currentMeeting } = await supabaseAdmin
     .from("meetings").select("status, client_id, adviser_id, advisers(firm_id)").eq("id", meetingId).single();
-  if (!currentMeeting || currentMeeting.status !== "transcribing") {
+
+  // Allow retry if we're stuck on 'extracting' too, in case a previous attempt crashed
+  if (!currentMeeting || (currentMeeting.status !== "transcribing" && currentMeeting.status !== "extracting")) {
     return Response.json({ ok: true, skipped: true });
   }
   await supabaseAdmin.from("meetings").update({ status: "extracting" }).eq("id", meetingId);
+
+  let transcriptText = "";
 
   try {
     const transcriptRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcript_id}`, {
@@ -58,34 +59,44 @@ export async function POST(req: Request) {
       return Response.json({ step: "fetch transcript", error: await transcriptRes.text() }, { status: 500 });
     }
     const transcriptData = await transcriptRes.json();
-    const transcriptText = transcriptData.text ?? "";
+    transcriptText = transcriptData.text ?? "";
 
     if (transcriptText.trim().length < 10) {
       await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
       return Response.json({ step: "empty transcript", error: "No speech detected." }, { status: 500 });
     }
 
-    await supabaseAdmin.from("transcripts").insert({
-      meeting_id: meetingId, full_text: transcriptText, utterances: transcriptData.utterances,
-    });
-
-    let practiceType = "wealth_management";
-    const firmId = (currentMeeting as any).advisers?.firm_id;
-    if (firmId) {
-      const { data: firm } = await supabaseAdmin.from("firms").select("practice_type").eq("id", firmId).single();
-      practiceType = firm?.practice_type ?? "wealth_management";
+    const { data: existingTranscript } = await supabaseAdmin
+      .from("transcripts").select("id").eq("meeting_id", meetingId).maybeSingle();
+    if (!existingTranscript) {
+      await supabaseAdmin.from("transcripts").insert({
+        meeting_id: meetingId, full_text: transcriptText, utterances: transcriptData.utterances,
+      });
     }
-    const categorySet = CATEGORY_SETS[practiceType] ?? CATEGORY_SETS.wealth_management;
-    const domainContext = DOMAIN_CONTEXT[practiceType] ?? DOMAIN_CONTEXT.wealth_management;
+  } catch (e: any) {
+    await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
+    return Response.json({ step: "transcript fetch/save", error: e.message ?? String(e) }, { status: 500 });
+  }
 
-    const { data: existingFacts } = await supabaseAdmin
-      .from("client_facts").select("category, data")
-      .eq("client_id", currentMeeting.client_id).is("superseded_by", null);
-    const knownFactsText = (existingFacts ?? [])
-      .map((f: any) => `${f.data.label}: ${f.data.value}`).join("\n")
-      || "No prior information on file — this is the first recorded meeting.";
+  let practiceType = "wealth_management";
+  const firmId = (currentMeeting as any).advisers?.firm_id;
+  if (firmId) {
+    const { data: firm } = await supabaseAdmin.from("firms").select("practice_type").eq("id", firmId).single();
+    practiceType = firm?.practice_type ?? "wealth_management";
+  }
+  const categorySet = CATEGORY_SETS[practiceType] ?? CATEGORY_SETS.wealth_management;
+  const domainContext = DOMAIN_CONTEXT[practiceType] ?? DOMAIN_CONTEXT.wealth_management;
 
-    const extractionPromise = anthropic.messages.create({
+  const { data: existingFacts } = await supabaseAdmin
+    .from("client_facts").select("category, data")
+    .eq("client_id", currentMeeting.client_id).is("superseded_by", null);
+  const knownFactsText = (existingFacts ?? [])
+    .map((f: any) => `${f.data.label}: ${f.data.value}`).join("\n")
+    || "No prior information on file — this is the first recorded meeting.";
+
+  let facts;
+  try {
+    const extraction = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 4096,
       system: `You are assisting ${domainContext}. You already know the following about this
@@ -124,34 +135,43 @@ nothing else, no markdown fences:
   }
 }
 
-For long transcripts, cover the whole conversation, not just the beginning. Only include
+For long transcripts, cover the whole conversation, not just the beginning. Limit to the 20
+most important fields if the conversation covers a very large number of topics. Only include
 fields and attention_items genuinely supported by the transcript. All monetary figures are
 in GBP unless stated otherwise. Do not invent information.`,
       messages: [{ role: "user", content: transcriptText }],
     });
+    const rawText = extraction.content.find((b) => b.type === "text")!.text;
+    facts = JSON.parse(stripFences(rawText));
+  } catch (e: any) {
+    await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
+    return Response.json({ step: "anthropic extraction", error: e.message ?? String(e) }, { status: 500 });
+  }
 
-    const summaryPromise = anthropic.messages.create({
+  let summary;
+  try {
+    const summaryResp = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 700,
       system: "Write a short, neutral, plain-English summary of this meeting for the client's own records, covering the whole conversation. Topics discussed and agreed next steps only. All monetary figures are in GBP unless stated otherwise.",
       messages: [{ role: "user", content: transcriptText }],
     });
+    summary = summaryResp.content.find((b) => b.type === "text")!.text;
+  } catch (e: any) {
+    await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
+    return Response.json({ step: "anthropic summary", error: e.message ?? String(e) }, { status: 500 });
+  }
 
-    const [extraction, summaryResp] = await Promise.all([extractionPromise, summaryPromise]);
-    const rawText = extraction.content.find((b) => b.type === "text")!.text;
-    const facts = JSON.parse(stripFences(rawText));
-    const summary = summaryResp.content.find((b) => b.type === "text")!.text;
-
+  try {
     await supabaseAdmin.from("extracted_facts").insert({ meeting_id: meetingId, category: "facts", payload: facts });
     if (facts.client_sentiment) {
       await supabaseAdmin.from("internal_notes").insert({ meeting_id: meetingId, type: "sentiment", payload: facts.client_sentiment });
     }
-
     await supabaseAdmin.from("meetings").update({ status: "done", client_summary: summary }).eq("id", meetingId);
-
-    return Response.json({ ok: true });
   } catch (e: any) {
     await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
-    return Response.json({ step: "extraction pipeline", error: e.message ?? String(e) }, { status: 500 });
+    return Response.json({ step: "save results", error: e.message ?? String(e) }, { status: 500 });
   }
+
+  return Response.json({ ok: true });
 }
