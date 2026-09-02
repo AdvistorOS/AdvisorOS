@@ -80,7 +80,7 @@ async function startMeetingRecording() {
   setFile(null);
   try {
   const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-   const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const displayAudioTracks = displayStream.getAudioTracks();
     if (displayAudioTracks.length === 0) {
       displayStream.getTracks().forEach((t) => t.stop());

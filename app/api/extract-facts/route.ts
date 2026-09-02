@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   // Run both in PARALLEL — total wall time is whichever is slower, not their sum.
   const extractionPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 3000,
+    max_tokens: 4096,
     system: `You are assisting ${domainContext}. You already know the following about this
 client from previous meetings:
 
