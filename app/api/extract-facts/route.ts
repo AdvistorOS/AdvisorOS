@@ -31,8 +31,6 @@ export async function POST(req: Request) {
   }
   await supabaseAdmin.from("meetings").update({ status: "summarizing" }).eq("id", meetingId);
 
-  // Fetch the most recent transcript row explicitly, in case duplicates ever
-  // exist — never rely on .single() here, since that throws on more than one row.
   const { data: transcriptRows } = await supabaseAdmin
     .from("transcripts").select("full_text").eq("meeting_id", meetingId).order("id", { ascending: false }).limit(1);
   const transcriptText = transcriptRows?.[0]?.full_text ?? "";
@@ -60,7 +58,7 @@ export async function POST(req: Request) {
 
   const extractionPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 2048,
+    max_tokens: 4096,
     system: `You are assisting ${domainContext}. You already know the following about this
 client from previous meetings:
 
@@ -71,13 +69,13 @@ nothing else, no markdown fences:
 
 {
   "fields": [
-    { "key": "short_unique_slug", "category": "${categorySet}", "label": "Human-readable label", "value": "Human-readable value", "evidence": "Short paraphrase of what was said", "confidence": "high | medium | low", "change_note": "Only if this updates something already known" }
+    { "key": "short_unique_slug", "category": "${categorySet}", "label": "Human-readable label", "value": "Human-readable value", "evidence": "Very short paraphrase, under 12 words", "confidence": "high | medium | low", "change_note": "Only if this updates something already known" }
   ],
   "attention_items": [
-    { "title": "...", "status": "Not established | Missing | Incomplete | Not sufficiently established", "description": "..." }
+    { "title": "...", "status": "Not established | Missing | Incomplete | Not sufficiently established", "description": "One short sentence" }
   ],
   "life_events": [
-    { "title": "...", "description": "..." }
+    { "title": "...", "description": "One short sentence" }
   ],
   "action_items": [
     { "description": "...", "owner": "adviser | client" }
@@ -89,17 +87,19 @@ nothing else, no markdown fences:
   }
 }
 
-For long transcripts, cover the whole conversation, not just the beginning. Limit to the 10
-most important fields if the conversation covers a very large number of topics. Only include
-fields and attention_items genuinely supported by the transcript. All monetary figures are
-in GBP unless stated otherwise. Do not invent information.`,
+STRICT LIMITS to keep the response short: maximum 8 fields, maximum 5 attention_items, maximum
+3 life_events, maximum 5 action_items. Pick only the most important items if the conversation
+covers more than this. Keep every text value brief — a few words, not full sentences, except
+where a short sentence is explicitly requested above. For long transcripts, draw from the whole
+conversation, not just the beginning. All monetary figures are in GBP unless stated otherwise.
+Do not invent information. Output ONLY the raw JSON object, complete and valid, nothing else.`,
     messages: [{ role: "user", content: transcriptText }],
   });
 
   const summaryPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 500,
-    system: "Write a short, neutral, plain-English summary of this meeting for the client's own records, covering the whole conversation. Topics discussed and agreed next steps only. All monetary figures are in GBP unless stated otherwise.",
+    max_tokens: 400,
+    system: "Write a short, neutral, plain-English summary (3-5 sentences max) of this meeting for the client's own records, covering the whole conversation. Topics discussed and agreed next steps only. All monetary figures are in GBP unless stated otherwise.",
     messages: [{ role: "user", content: transcriptText }],
   });
 
@@ -112,6 +112,11 @@ in GBP unless stated otherwise. Do not invent information.`,
   if (summaryResult.status === "rejected") {
     await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
     return Response.json({ step: "anthropic summary", error: String(summaryResult.reason) }, { status: 500 });
+  }
+
+  if (extractionResult.value.stop_reason === "max_tokens") {
+    await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
+    return Response.json({ step: "extraction truncated", error: "Response was cut off before completing — transcript may be too dense. Try again or shorten the recording." }, { status: 500 });
   }
 
   let facts, summary;
