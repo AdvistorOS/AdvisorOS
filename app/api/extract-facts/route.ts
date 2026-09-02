@@ -69,13 +69,13 @@ nothing else, no markdown fences:
 
 {
   "fields": [
-    { "key": "short_unique_slug", "category": "${categorySet}", "label": "Human-readable label", "value": "Human-readable value", "evidence": "Very short paraphrase, under 12 words", "confidence": "high | medium | low", "change_note": "Only if this updates something already known" }
+    { "key": "short_unique_slug", "category": "${categorySet}", "label": "Human-readable label", "value": "Human-readable value", "evidence": "A real, specific paraphrase of what was actually said — one clear sentence", "confidence": "high | medium | low", "change_note": "Only if this updates something already known" }
   ],
   "attention_items": [
-    { "title": "...", "status": "Not established | Missing | Incomplete | Not sufficiently established", "description": "One short sentence" }
+    { "title": "...", "status": "Not established | Missing | Incomplete | Not sufficiently established", "description": "One sentence on what's missing and why it matters" }
   ],
   "life_events": [
-    { "title": "...", "description": "One short sentence" }
+    { "title": "...", "description": "One sentence on what was said and why it matters" }
   ],
   "action_items": [
     { "description": "...", "owner": "adviser | client" }
@@ -87,19 +87,18 @@ nothing else, no markdown fences:
   }
 }
 
-STRICT LIMITS to keep the response short: maximum 8 fields, maximum 5 attention_items, maximum
-3 life_events, maximum 5 action_items. Pick only the most important items if the conversation
-covers more than this. Keep every text value brief — a few words, not full sentences, except
-where a short sentence is explicitly requested above. For long transcripts, draw from the whole
-conversation, not just the beginning. All monetary figures are in GBP unless stated otherwise.
-Do not invent information. Output ONLY the raw JSON object, complete and valid, nothing else.`,
+Cover the whole conversation thoroughly — for a long, detailed meeting this can genuinely mean
+15-20 fields if that much real information was discussed. Don't pad or invent to hit a number,
+but don't artificially limit real detail either. All monetary figures are in GBP unless stated
+otherwise. Do not invent information. Output ONLY the raw JSON object, complete and valid,
+nothing else — this is critical, an incomplete response is a failure.`,
     messages: [{ role: "user", content: transcriptText }],
   });
 
   const summaryPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 400,
-    system: "Write a short, neutral, plain-English summary (3-5 sentences max) of this meeting for the client's own records, covering the whole conversation. Topics discussed and agreed next steps only. All monetary figures are in GBP unless stated otherwise.",
+    max_tokens: 600,
+    system: "Write a clear, plain-English summary of this meeting for the client's own records — covering the whole conversation with real substance, not padded with filler phrases or throat-clearing. Aim for dense, information-rich prose: what was discussed, what was decided, agreed next steps. Roughly 150-250 words. All monetary figures are in GBP unless stated otherwise.",
     messages: [{ role: "user", content: transcriptText }],
   });
 
@@ -116,7 +115,7 @@ Do not invent information. Output ONLY the raw JSON object, complete and valid, 
 
   if (extractionResult.value.stop_reason === "max_tokens") {
     await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
-    return Response.json({ step: "extraction truncated", error: "Response was cut off before completing — transcript may be too dense. Try again or shorten the recording." }, { status: 500 });
+    return Response.json({ step: "extraction truncated", error: "Response was cut off before completing. Try again." }, { status: 500 });
   }
 
   let facts, summary;
