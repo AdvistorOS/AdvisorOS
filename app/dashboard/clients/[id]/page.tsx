@@ -5,6 +5,7 @@ import { BriefCard } from "./BriefCard";
 import { DeleteClientButton } from "./DeleteClientButton";
 import { AskClientAI } from "./AskClientAI";
 import { PrepBrief } from "./PrepBrief";
+import { CrmStatus } from "./CrmStatus";
 import { ClientDashboard } from "./ClientDashboard";
 import { ClientTimeline } from "./ClientTimeline";
 
@@ -63,6 +64,8 @@ export default async function ClientRecord({ params }: { params: Promise<{ id: s
       </div>
 
       <BriefCard clientId={id} />
+
+      <CrmStatus clientId={id} />
 
       <PrepBrief clientId={id} />
 
