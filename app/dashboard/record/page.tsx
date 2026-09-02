@@ -267,7 +267,7 @@ export default function RecordPage() {
       setStatus("Creating meeting record...");
       const { data: meeting, error: meetingErr } = await supabase
         .from("meetings")
-        .insert({ client_id: clientId, adviser_id: user.id, media_url: signedData.signedUrl, objective: objective.trim() || null })
+        .insert({ client_id: clientId, adviser_id: user.id, media_url: signedData.signedUrl, media_path: filePath, objective: objective.trim() || null })
         .select().single();
       if (meetingErr) { setStatus("Meeting insert error: " + meetingErr.message); setLoading(false); setFailed(true); return; }
 
