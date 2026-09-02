@@ -2,11 +2,12 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Mic, Square, UploadCloud, FileAudio, Loader2, RotateCw, Plus, X, Check } from "lucide-react";
+import { ArrowLeft, Mic, Square, UploadCloud, FileAudio, Loader2, RotateCw, Plus, X, Check, Monitor } from "lucide-react";
 import Link from "next/link";
 import { withRetry } from "@/lib/retry";
 
 type Attendee = { name: string; email: string; phone: string };
+type RecordMode = "mic" | "system";
 
 export default function RecordPage() {
   const [clientName, setClientName] = useState("");
@@ -18,6 +19,7 @@ export default function RecordPage() {
   const [attendeeEmail, setAttendeeEmail] = useState("");
   const [attendeePhone, setAttendeePhone] = useState("");
   const [recording, setRecording] = useState(false);
+  const [recordMode, setRecordMode] = useState<RecordMode | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -26,14 +28,16 @@ export default function RecordPage() {
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [seconds, setSeconds] = useState(0);
+  const [recordError, setRecordError] = useState("");
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mimeTypeRef = useRef<string>("");
+  const activeStreamsRef = useRef<MediaStream[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const supabase = createClient();
   const router = useRouter();
 
-  // Search for existing clients as the name is typed — prevents accidental duplicates
   useEffect(() => {
     if (!clientName.trim() || selectedClientId) { setClientMatches([]); return; }
     const t = setTimeout(async () => {
@@ -75,10 +79,72 @@ export default function RecordPage() {
     return "";
   }
 
-  async function startRecording() {
+  function stopAllStreams() {
+    activeStreamsRef.current.forEach((s) => s.getTracks().forEach((t) => t.stop()));
+    activeStreamsRef.current = [];
+    audioContextRef.current?.close();
+    audioContextRef.current = null;
+  }
+
+  async function startMicRecording() {
     setStatus("");
     setFile(null);
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    setRecordError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      activeStreamsRef.current = [stream];
+      beginRecordingFrom(stream, "mic");
+    } catch (e: any) {
+      setRecordError("Couldn't access microphone: " + e.message);
+    }
+  }
+
+  async function startSystemRecording() {
+    setStatus("");
+    setFile(null);
+    setRecordError("");
+    try {
+      // Captures the shared tab/window's audio (e.g. a Zoom/Teams call playing in browser)
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      const systemAudioTracks = displayStream.getAudioTracks();
+      if (!systemAudioTracks.length) {
+        displayStream.getTracks().forEach((t) => t.stop());
+        setRecordError("No audio was shared — when the share prompt appears, make sure to tick 'Share tab audio' (Chrome) or 'Share audio' before confirming.");
+        return;
+      }
+
+      let micStream: MediaStream | null = null;
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        // Mic is optional here — system audio alone still works if mic access is denied
+      }
+
+      // Mix system audio + mic (if available) into a single stream using Web Audio API,
+      // so both sides of the call are captured together.
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
+      const destination = audioContext.createMediaStreamDestination();
+
+      const systemSource = audioContext.createMediaStreamSource(new MediaStream(systemAudioTracks));
+      systemSource.connect(destination);
+
+      if (micStream) {
+        const micSource = audioContext.createMediaStreamSource(micStream);
+        micSource.connect(destination);
+      }
+
+      activeStreamsRef.current = micStream ? [displayStream, micStream] : [displayStream];
+      // Stop the video track immediately — we only need audio, no need to keep capturing video
+      displayStream.getVideoTracks().forEach((t) => t.stop());
+
+      beginRecordingFrom(destination.stream, "system");
+    } catch (e: any) {
+      setRecordError("Couldn't start screen/tab audio capture: " + e.message);
+    }
+  }
+
+  function beginRecordingFrom(stream: MediaStream, mode: RecordMode) {
     chunks.current = [];
     const mimeType = pickSupportedMimeType();
     mimeTypeRef.current = mimeType;
@@ -88,11 +154,12 @@ export default function RecordPage() {
       const blob = new Blob(chunks.current, { type: mimeType || "audio/webm" });
       setAudioBlob(blob);
       setAudioUrl(URL.createObjectURL(blob));
-      stream.getTracks().forEach((t) => t.stop());
+      stopAllStreams();
     };
     mr.start();
     mediaRecorder.current = mr;
     setRecording(true);
+    setRecordMode(mode);
     setSeconds(0);
     timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
   }
@@ -136,7 +203,6 @@ export default function RecordPage() {
 
       let clientId = selectedClientId;
       if (!clientId) {
-        // Case-insensitive check before creating — belt and braces against the search above
         const { data: existing } = await supabase.from("clients").select("id")
           .ilike("full_name", clientName.trim()).maybeSingle();
         if (existing) {
@@ -152,7 +218,6 @@ export default function RecordPage() {
         }
       }
 
-      // Create or match contacts for each attendee, under this client
       const attendeeContactIds: string[] = [];
       for (const a of attendees) {
         const { data: existingContact } = await supabase.from("contacts").select("id")
@@ -297,12 +362,24 @@ export default function RecordPage() {
           </div>
         </div>
 
-        <div className="flex flex-col items-center gap-3 mb-5">
+        <div className="flex flex-col items-center gap-3 mb-2">
           {!recording && !audioUrl && (
-            <button type="button" onClick={startRecording} disabled={loading}
-              className="w-14 h-14 rounded-full bg-warn text-paper flex items-center justify-center hover:opacity-90 transition disabled:opacity-40">
-              <Mic size={20} />
-            </button>
+            <div className="flex items-center gap-6">
+              <button type="button" onClick={startMicRecording} disabled={loading}
+                className="w-14 h-14 rounded-full bg-warn text-paper flex items-center justify-center hover:opacity-90 transition disabled:opacity-40" title="Mic only">
+                <Mic size={20} />
+              </button>
+              <button type="button" onClick={startSystemRecording} disabled={loading}
+                className="w-14 h-14 rounded-full bg-teal text-paper flex items-center justify-center hover:opacity-90 transition disabled:opacity-40" title="Record Zoom/Teams">
+                <Monitor size={20} />
+              </button>
+            </div>
+          )}
+          {!recording && !audioUrl && (
+            <div className="flex items-center gap-6 text-center">
+              <p className="text-xs text-ink-muted w-14">Mic only</p>
+              <p className="text-xs text-ink-muted w-14">Record Zoom/Teams</p>
+            </div>
           )}
           {recording && (
             <>
@@ -310,7 +387,7 @@ export default function RecordPage() {
                 className="w-14 h-14 rounded-full bg-ink text-paper flex items-center justify-center hover:opacity-90 transition animate-pulse">
                 <Square size={18} />
               </button>
-              <p className="font-mono text-sm text-warn">{formatTime(seconds)} · Recording…</p>
+              <p className="font-mono text-sm text-warn">{formatTime(seconds)} · Recording {recordMode === "system" ? "call" : "mic"}…</p>
             </>
           )}
           {audioUrl && !recording && (
@@ -323,9 +400,10 @@ export default function RecordPage() {
             </div>
           )}
           {!recording && !audioUrl && <p className="text-xs text-ink-muted">Tap to start recording</p>}
+          {recordError && <p className="text-xs text-warn text-center">{recordError}</p>}
         </div>
 
-        <div className="flex items-center gap-3 mb-5">
+        <div className="flex items-center gap-3 mb-5 mt-3">
           <div className="flex-1 h-px bg-border" />
           <span className="text-xs text-ink-muted">or</span>
           <div className="flex-1 h-px bg-border" />
