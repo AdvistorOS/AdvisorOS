@@ -4,6 +4,8 @@ import { ArrowLeft, Clock3, StickyNote, TrendingUp, Users, User } from "lucide-r
 import { BriefCard } from "./BriefCard";
 import { DeleteClientButton } from "./DeleteClientButton";
 import { AskClientAI } from "./AskClientAI";
+import { PrepBrief } from "./PrepBrief";
+import { ClientDashboard } from "./ClientDashboard";
 import { ClientTimeline } from "./ClientTimeline";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -61,6 +63,10 @@ export default async function ClientRecord({ params }: { params: Promise<{ id: s
       </div>
 
       <BriefCard clientId={id} />
+
+      <PrepBrief clientId={id} />
+
+      <ClientDashboard clientId={id} />
 
       <AskClientAI clientId={id} />
 
