@@ -1,19 +1,24 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+
+const MAX_AUTO_RETRIES = 5;
 
 export function AutoRefresh({ meetingId, status, intervalMs = 5000 }: { meetingId: string; status: string; intervalMs?: number }) {
   const router = useRouter();
+  const attemptCount = useRef(0);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
-    // Retry from either 'extracting' or 'summarizing' — if a previous attempt
-    // died mid-flight (timeout, dropped request), this recovers it instead of
-    // leaving the meeting permanently stuck with no way forward.
-    if (status === "extracting" || status === "summarizing") {
+    if ((status === "extracting" || status === "summarizing") && attemptCount.current < MAX_AUTO_RETRIES) {
+      attemptCount.current += 1;
+      setRetrying(true);
       fetch("/api/extract-facts", {
         method: "POST",
         body: JSON.stringify({ meetingId }),
-      }).catch(() => {});
+      })
+        .catch(() => {})
+        .finally(() => setRetrying(false));
     }
   }, [status, meetingId]);
 
@@ -21,6 +26,11 @@ export function AutoRefresh({ meetingId, status, intervalMs = 5000 }: { meetingI
     const t = setInterval(() => router.refresh(), intervalMs);
     return () => clearInterval(t);
   }, [intervalMs, router]);
+
+  // Reset the attempt counter whenever we land on a genuinely new meeting
+  useEffect(() => {
+    attemptCount.current = 0;
+  }, [meetingId]);
 
   return null;
 }

@@ -47,15 +47,26 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
       </div>
 
       {isFailed && (
-        <section className="bg-warn-soft border border-warn/20 rounded-xl p-6 flex items-center justify-between">
-          <p className="text-sm text-ink">This meeting failed to process.</p>
-          <RetryButton meetingId={id} />
+        <section className="bg-warn-soft border border-warn/20 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm text-ink font-medium">This meeting failed to process.</p>
+            <RetryButton meetingId={id} />
+          </div>
+          <p className="text-xs text-ink-muted">
+            Automatic retries were already attempted and didn't succeed — this is a genuine failure,
+            not a false alarm. Check your Anthropic account has available credit, then retry.
+          </p>
         </section>
       )}
 
       {isProcessing && (
         <section className="bg-teal-soft border border-teal/20 rounded-xl p-6">
           <p className="text-sm text-ink">Processing — {statusLabel[meeting?.status ?? ""] ?? "working…"}</p>
+          {(meeting?.status === "extracting" || meeting?.status === "summarizing") && (
+            <p className="text-xs text-ink-muted mt-1">
+              This page retries automatically in the background — no action needed. Leave it open.
+            </p>
+          )}
         </section>
       )}
 
