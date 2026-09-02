@@ -9,6 +9,13 @@ function stripFences(text: string) {
   return text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
 }
 
+function formatTime(ms: number) {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 const CATEGORY_SETS: Record<string, string> = {
   wealth_management: "income | expenditure | assets | liabilities | pensions | dependants | objectives | attitude_to_risk | capacity_for_loss | existing_products",
   profit_consulting: "revenue | costs | margins | cash_flow | operations | team_structure | growth_objectives | competitive_position | risks_challenges",
@@ -24,7 +31,7 @@ export async function POST(req: Request) {
   if (!meetingId) return Response.json({ error: "meetingId required" }, { status: 400 });
 
   const { data: meeting } = await supabaseAdmin
-    .from("meetings").select("status, client_id, advisers(firm_id)").eq("id", meetingId).single();
+    .from("meetings").select("status, client_id, objective, advisers(firm_id)").eq("id", meetingId).single();
 
   if (!meeting || (meeting.status !== "extracting" && meeting.status !== "summarizing")) {
     return Response.json({ ok: true, skipped: true });
@@ -32,13 +39,18 @@ export async function POST(req: Request) {
   await supabaseAdmin.from("meetings").update({ status: "summarizing" }).eq("id", meetingId);
 
   const { data: transcriptRows } = await supabaseAdmin
-    .from("transcripts").select("full_text").eq("meeting_id", meetingId).order("id", { ascending: false }).limit(1);
+    .from("transcripts").select("full_text, utterances").eq("meeting_id", meetingId).order("id", { ascending: false }).limit(1);
   const transcriptText = transcriptRows?.[0]?.full_text ?? "";
+  const utterances = (transcriptRows?.[0]?.utterances as any[]) ?? [];
 
   if (!transcriptText || transcriptText.trim().length < 10) {
     await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
     return Response.json({ step: "load transcript", error: "No transcript text found for this meeting." }, { status: 500 });
   }
+
+  const timestampedTranscript = utterances.length
+    ? utterances.map((u: any) => `[${formatTime(u.start)}] Speaker ${u.speaker}: ${u.text}`).join("\n")
+    : transcriptText;
 
   let practiceType = "wealth_management";
   const firmId = (meeting as any).advisers?.firm_id;
@@ -56,19 +68,21 @@ export async function POST(req: Request) {
     .map((f: any) => `${f.data.label}: ${f.data.value}`).join("\n")
     || "No prior information on file — this is the first recorded meeting.";
 
-  // Firm limits on output size — this is the main lever for staying inside
-  // Vercel's 60-second hard cap on the free plan. Less to generate = faster,
-  // more reliably, every time. Trades some depth for consistency.
+  const objectiveText = meeting.objective?.trim()
+    ? `The stated objective for this meeting was: "${meeting.objective.trim()}"`
+    : "No specific objective was set — output objective_assessment with achieved set to null.";
+
   const extractionPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 2048,
-    system: `You are assisting ${domainContext}. You already know the following about this
-client from previous meetings:
+    max_tokens: 3072,
+    system: `You are assisting ${domainContext}. Known about this client already:
 
 ${knownFactsText}
 
-Extract information from today's meeting transcript as raw JSON matching this exact shape,
-nothing else, no markdown fences:
+${objectiveText}
+
+The transcript below is timestamped and speaker-labeled ([mm:ss] Speaker X: text). Extract
+information as raw JSON matching this exact shape, nothing else, no markdown fences:
 
 {
   "fields": [
@@ -87,15 +101,34 @@ nothing else, no markdown fences:
     "overall_satisfaction": "positive | neutral | unhappy",
     "dissatisfaction_signals": ["..."],
     "suggested_actions": ["..."]
+  },
+  "objective_assessment": {
+    "achieved": "yes | partially | no | null",
+    "summary": "One or two sentences",
+    "what_helped": "Short phrase or empty string",
+    "what_hindered": "Short phrase or empty string"
+  },
+  "scorecard": {
+    "discovery": 0, "question_quality": 0, "listening": 0, "objection_handling": 0,
+    "commercial_positioning": 0, "client_engagement": 0, "next_step_clarity": 0, "overall": 0
+  },
+  "stage_timeline": [
+    { "time": "mm:ss", "stage": "Introduction | Discovery | Problem Recognition | Commercial | Objection | Resolution | Buying Signal | Next Step", "note": "Short phrase" }
+  ],
+  "speaker_sentiment_timeline": {
+    "A": [ { "time": "mm:ss", "sentiment": "one or two words", "note": "Short phrase" } ]
   }
 }
 
-STRICT LIMITS, non-negotiable: maximum 8 fields, maximum 5 attention_items, maximum 3
-life_events, maximum 5 action_items. Pick only the most important items if the conversation
-covers more. Keep every text value brief. Cover the whole conversation, not just the start.
-All monetary figures are in GBP unless stated otherwise. Do not invent information. Output
-ONLY the raw JSON object, complete and valid, nothing else.`,
-    messages: [{ role: "user", content: transcriptText }],
+Score scorecard fields 0-10 honestly based on evidence, not a flattering default. Use REAL
+timestamps from the transcript for both timelines — never invent times. Key
+speaker_sentiment_timeline by the speaker labels that actually appear (A, B, C...). stage_timeline:
+max 8 entries, only genuine shifts. speaker_sentiment_timeline: max 5 entries per speaker, only
+genuine tone shifts. Keep both short for short meetings — do not pad. STRICT LIMITS elsewhere:
+max 8 fields, max 5 attention_items, max 3 life_events, max 5 action_items. All monetary figures
+in GBP unless stated otherwise. Do not invent information. Output ONLY the raw JSON object,
+complete and valid, nothing else.`,
+    messages: [{ role: "user", content: timestampedTranscript }],
   });
 
   const summaryPromise = anthropic.messages.create({
