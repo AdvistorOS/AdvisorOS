@@ -101,7 +101,7 @@ ONLY the raw JSON object, complete and valid, nothing else.`,
   const summaryPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 400,
-    system: "Write a short, plain-English summary (4-6 sentences) of this meeting for the client's own records — real substance, no filler. What was discussed, decided, agreed next steps. All monetary figures are in GBP unless stated otherwise.",
+    system: "Write a summary of this meeting for the client's own records, organized into short sections with clear headers, e.g. 'Topics Discussed', 'Decisions Made', 'Next Steps'. Use 2-4 sentences per section, plain English, real substance and no filler. All monetary figures are in GBP unless stated otherwise.",
     messages: [{ role: "user", content: transcriptText }],
   });
 
