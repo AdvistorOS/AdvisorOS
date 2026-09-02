@@ -11,6 +11,7 @@ type RecordMode = "mic" | "system";
 
 export default function RecordPage() {
   const [clientName, setClientName] = useState("");
+  const [objective, setObjective] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientMatches, setClientMatches] = useState<{ id: string; full_name: string }[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -266,7 +267,7 @@ export default function RecordPage() {
       setStatus("Creating meeting record...");
       const { data: meeting, error: meetingErr } = await supabase
         .from("meetings")
-        .insert({ client_id: clientId, adviser_id: user.id, media_url: signedData.signedUrl })
+        .insert({ client_id: clientId, adviser_id: user.id, media_url: signedData.signedUrl, objective: objective.trim() || null })
         .select().single();
       if (meetingErr) { setStatus("Meeting insert error: " + meetingErr.message); setLoading(false); setFailed(true); return; }
 
@@ -333,6 +334,13 @@ export default function RecordPage() {
         <input placeholder="Client email (optional)" type="email" value={clientEmail}
           onChange={(e) => setClientEmail(e.target.value)} disabled={loading || !!selectedClientId}
           className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal focus:ring-1 focus:ring-teal transition disabled:opacity-60 mb-4" />
+
+        <div className="mb-4">
+          <p className="text-xs font-mono text-ink-muted uppercase tracking-widest mb-2">Meeting objective (optional)</p>
+          <input placeholder="e.g. Agree commercial terms, present findings…" value={objective}
+            onChange={(e) => setObjective(e.target.value)} disabled={loading}
+            className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal disabled:opacity-60" />
+        </div>
 
         <div className="mb-6">
           <p className="text-xs font-mono text-ink-muted uppercase tracking-widest mb-2">Meeting attendees (optional)</p>
