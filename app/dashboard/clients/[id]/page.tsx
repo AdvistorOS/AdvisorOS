@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { ArrowLeft, Clock3, StickyNote, TrendingUp } from "lucide-react";
+import { ArrowLeft, Clock3, StickyNote, TrendingUp, Users, User } from "lucide-react";
 import { BriefCard } from "./BriefCard";
 import { DeleteClientButton } from "./DeleteClientButton";
 
@@ -26,6 +26,7 @@ export default async function ClientRecord({ params }: { params: Promise<{ id: s
   const { data: actions } = await supabase.from("actions").select("*").eq("client_id", id).eq("status", "open");
   const { data: meetings } = await supabase.from("meetings").select("id, created_at, status").eq("client_id", id).order("created_at", { ascending: false });
   const { count: noteCount } = await supabase.from("client_notes").select("*", { count: "exact", head: true }).eq("client_id", id);
+  const { data: contacts } = await supabase.from("contacts").select("*").eq("client_id", id).order("full_name");
 
   const { data: allVersions } = await supabase.from("client_facts").select("category").eq("client_id", id);
   const confirmCounts: Record<string, number> = {};
@@ -58,6 +59,29 @@ export default async function ClientRecord({ params }: { params: Promise<{ id: s
       </div>
 
       <BriefCard clientId={id} />
+
+      {contacts && contacts.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <Users size={15} className="text-teal" />
+            <p className="font-mono text-xs text-ink-muted uppercase tracking-widest">Attendees</p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-2.5">
+            {contacts.map((c: any) => (
+              <Link key={c.id} href={`/dashboard/clients/${id}/contacts/${c.id}`}
+                className="flex items-center gap-3 bg-surface border border-border rounded-lg px-4 py-3 card-shadow card-shadow-hover transition">
+                <div className="w-8 h-8 rounded-full bg-teal-soft flex items-center justify-center flex-shrink-0">
+                  <User size={14} className="text-teal" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm text-ink truncate">{c.full_name}</p>
+                  {c.email && <p className="text-xs text-ink-muted truncate">{c.email}</p>}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {actions && actions.length > 0 && (
         <section>
