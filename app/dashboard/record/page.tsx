@@ -2,22 +2,21 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Mic, Square, UploadCloud, FileAudio, Loader2, RotateCw, Monitor } from "lucide-react";
+import { ArrowLeft, Mic, Square, UploadCloud, FileAudio, Loader2, RotateCw, Plus, X, Check } from "lucide-react";
 import Link from "next/link";
 import { withRetry } from "@/lib/retry";
-import { useToast } from "../ToastProvider";
 
-function pickSupportedMimeType() {
-  const preferred = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"];
-  for (const type of preferred) {
-    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(type)) return type;
-  }
-  return "";
-}
+type Attendee = { name: string; email: string; phone: string };
 
 export default function RecordPage() {
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
+  const [clientMatches, setClientMatches] = useState<{ id: string; full_name: string }[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [attendeeName, setAttendeeName] = useState("");
+  const [attendeeEmail, setAttendeeEmail] = useState("");
+  const [attendeePhone, setAttendeePhone] = useState("");
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
@@ -33,25 +32,47 @@ export default function RecordPage() {
   const mimeTypeRef = useRef<string>("");
   const supabase = createClient();
   const router = useRouter();
-  const toast = useToast();
 
-  // Warn before closing the tab or reloading while actively recording
+  // Search for existing clients as the name is typed — prevents accidental duplicates
   useEffect(() => {
-    function handleBeforeUnload(e: BeforeUnloadEvent) {
-      if (recording) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    }
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [recording]);
+    if (!clientName.trim() || selectedClientId) { setClientMatches([]); return; }
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from("clients").select("id, full_name")
+        .ilike("full_name", `%${clientName.trim()}%`).limit(5);
+      setClientMatches(data ?? []);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [clientName, selectedClientId]);
 
-  function handleBackClick(e: React.MouseEvent) {
-    if (recording) {
-      const ok = confirm("You're still recording — leaving now will lose this recording. Continue?");
-      if (!ok) e.preventDefault();
+  function selectExistingClient(c: { id: string; full_name: string }) {
+    setSelectedClientId(c.id);
+    setClientName(c.full_name);
+    setClientMatches([]);
+  }
+
+  function handleClientNameChange(v: string) {
+    setClientName(v);
+    setSelectedClientId(null);
+  }
+
+  function addAttendee() {
+    if (!attendeeName.trim()) return;
+    setAttendees((prev) => [...prev, { name: attendeeName.trim(), email: attendeeEmail.trim(), phone: attendeePhone.trim() }]);
+    setAttendeeName("");
+    setAttendeeEmail("");
+    setAttendeePhone("");
+  }
+
+  function removeAttendee(i: number) {
+    setAttendees((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  function pickSupportedMimeType() {
+    const preferred = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"];
+    for (const type of preferred) {
+      if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(type)) return type;
     }
+    return "";
   }
 
   async function startRecording() {
@@ -75,61 +96,7 @@ export default function RecordPage() {
     setSeconds(0);
     timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
   }
-async function startMeetingRecording() {
-  setStatus("");
-  setFile(null);
-  try {
-  const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const displayAudioTracks = displayStream.getAudioTracks();
-    if (displayAudioTracks.length === 0) {
-      displayStream.getTracks().forEach((t) => t.stop());
-      micStream.getTracks().forEach((t) => t.stop());
-      setStatus('No meeting audio was shared — in the share dialog, make sure "Share tab audio" (or "Share system audio") is checked, then try again.');
-      return;
-    }
 
-    // We only need the audio — drop the video track immediately
-    displayStream.getVideoTracks().forEach((t) => t.stop());
-
-    const audioCtx = new AudioContext();
-    const destination = audioCtx.createMediaStreamDestination();
-    audioCtx.createMediaStreamSource(micStream).connect(destination);
-    audioCtx.createMediaStreamSource(new MediaStream(displayAudioTracks)).connect(destination);
-
-    const mixedStream = destination.stream;
-    chunks.current = [];
-    const mimeType = pickSupportedMimeType();
-    mimeTypeRef.current = mimeType;
-    const mr = mimeType ? new MediaRecorder(mixedStream, { mimeType }) : new MediaRecorder(mixedStream);
-    mr.ondataavailable = (e) => chunks.current.push(e.data);
-    mr.onstop = () => {
-      const blob = new Blob(chunks.current, { type: mimeType || "audio/webm" });
-      setAudioBlob(blob);
-      setAudioUrl(URL.createObjectURL(blob));
-      micStream.getTracks().forEach((t) => t.stop());
-      displayStream.getTracks().forEach((t) => t.stop());
-      audioCtx.close();
-    };
-
-    // If they click Chrome's own "Stop sharing" bar instead of our button
-    displayAudioTracks[0].addEventListener("ended", () => {
-      if (mediaRecorder.current && mediaRecorder.current.state !== "inactive") stopRecording();
-    });
-
-    mr.start();
-    mediaRecorder.current = mr;
-    setRecording(true);
-    setSeconds(0);
-    timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
-  } catch (err: any) {
-    if (err?.name === "NotAllowedError") {
-      setStatus("Screen/tab share was cancelled — click again and choose the meeting tab to record it.");
-    } else {
-      setStatus("Couldn't start meeting recording: " + err.message);
-    }
-  }
-  }
   function stopRecording() {
     mediaRecorder.current?.stop();
     setRecording(false);
@@ -167,17 +134,42 @@ async function startMeetingRecording() {
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (userErr || !user) { setStatus("Auth error: " + (userErr?.message ?? "no user")); setLoading(false); setFailed(true); return; }
 
-      setStatus("Creating client record...");
-      const { data: client, error: clientErr } = await supabase
-        .from("clients")
-        .insert({ full_name: clientName, email: clientEmail.trim() || null, adviser_id: user.id })
-        .select()
-        .single();
-      if (clientErr) { setStatus("Client insert error: " + clientErr.message); setLoading(false); setFailed(true); return; }
+      let clientId = selectedClientId;
+      if (!clientId) {
+        // Case-insensitive check before creating — belt and braces against the search above
+        const { data: existing } = await supabase.from("clients").select("id")
+          .ilike("full_name", clientName.trim()).maybeSingle();
+        if (existing) {
+          clientId = existing.id;
+        } else {
+          setStatus("Creating client record...");
+          const { data: newClient, error: clientErr } = await supabase
+            .from("clients")
+            .insert({ full_name: clientName.trim(), email: clientEmail.trim() || null, adviser_id: user.id })
+            .select().single();
+          if (clientErr) { setStatus("Client insert error: " + clientErr.message); setLoading(false); setFailed(true); return; }
+          clientId = newClient.id;
+        }
+      }
+
+      // Create or match contacts for each attendee, under this client
+      const attendeeContactIds: string[] = [];
+      for (const a of attendees) {
+        const { data: existingContact } = await supabase.from("contacts").select("id")
+          .eq("client_id", clientId).ilike("full_name", a.name).maybeSingle();
+        if (existingContact) {
+          attendeeContactIds.push(existingContact.id);
+        } else {
+          const { data: newContact } = await supabase.from("contacts")
+            .insert({ client_id: clientId, full_name: a.name, email: a.email || null, phone: a.phone || null })
+            .select().single();
+          if (newContact) attendeeContactIds.push(newContact.id);
+        }
+      }
 
       setStatus(audioBlob ? "Uploading recording..." : "Uploading file...");
       const fileName = file ? file.name : `recording.${extForMime(mimeTypeRef.current)}`;
-      const filePath = `${client.id}/${Date.now()}-${fileName}`;
+      const filePath = `${clientId}/${Date.now()}-${fileName}`;
 
       let progressTimer = setInterval(() => {
         setProgress((p) => (p < 90 ? p + Math.random() * 8 : p));
@@ -193,7 +185,7 @@ async function startMeetingRecording() {
         );
       } catch (uploadErr: any) {
         clearInterval(progressTimer);
-        setStatus("Upload failed after retries: " + uploadErr.message + " — check your connection and try again.");
+        setStatus("Upload failed after retries: " + uploadErr.message);
         setLoading(false);
         setFailed(true);
         return;
@@ -203,31 +195,33 @@ async function startMeetingRecording() {
 
       setStatus("Generating access link...");
       const { data: signedData, error: signErr } = await supabase.storage
-        .from("recordings")
-        .createSignedUrl(filePath, 3600);
+        .from("recordings").createSignedUrl(filePath, 3600);
       if (signErr || !signedData) { setStatus("Signed URL error: " + (signErr?.message ?? "unknown")); setLoading(false); setFailed(true); return; }
 
       setStatus("Creating meeting record...");
       const { data: meeting, error: meetingErr } = await supabase
         .from("meetings")
-        .insert({ client_id: client.id, adviser_id: user.id, media_url: signedData.signedUrl })
-        .select()
-        .single();
+        .insert({ client_id: clientId, adviser_id: user.id, media_url: signedData.signedUrl })
+        .select().single();
       if (meetingErr) { setStatus("Meeting insert error: " + meetingErr.message); setLoading(false); setFailed(true); return; }
 
-      setStatus("Processing (transcription + AI — can take a few minutes for longer recordings)...");
+      if (attendeeContactIds.length) {
+        await supabase.from("meeting_attendees").insert(
+          attendeeContactIds.map((contact_id) => ({ meeting_id: meeting.id, contact_id }))
+        );
+      }
+
+      setStatus("Submitted — processing in the background. This page will update automatically, even for long recordings.");
       const res = await fetch("/api/process-meeting", {
         method: "POST",
         body: JSON.stringify({ meetingId: meeting.id }),
       });
 
       if (res.ok) {
-        toast(`${clientName}'s meeting is ready`);
         router.push(`/dashboard/meetings/${meeting.id}`);
       } else {
         const body = await res.text();
         setStatus("Processing failed: " + body);
-        toast("Processing failed", "error");
         setLoading(false);
         setFailed(true);
       }
@@ -242,7 +236,7 @@ async function startMeetingRecording() {
 
   return (
     <main className="max-w-md mx-auto px-8 py-16">
-      <Link href="/dashboard" onClick={handleBackClick} className="text-ink-muted hover:text-teal transition inline-flex items-center gap-1.5 text-sm mb-6">
+      <Link href="/dashboard" className="text-ink-muted hover:text-teal transition inline-flex items-center gap-1.5 text-sm mb-6">
         <ArrowLeft size={16} /> Back
       </Link>
 
@@ -253,34 +247,63 @@ async function startMeetingRecording() {
         <h1 className="font-display text-2xl text-ink mb-1">New meeting</h1>
         <p className="text-ink-muted text-sm mb-6">Record live, or upload a file — whichever's easier right now.</p>
 
-        <div className="space-y-3 mb-6">
-          <input placeholder="Client name" required value={clientName}
-            onChange={(e) => setClientName(e.target.value)} disabled={loading}
+        <div className="space-y-1 mb-2 relative">
+          <input placeholder="Client / company name" required value={clientName}
+            onChange={(e) => handleClientNameChange(e.target.value)} disabled={loading}
             className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal focus:ring-1 focus:ring-teal transition disabled:opacity-60" />
-          <input placeholder="Client email (optional)" type="email" value={clientEmail}
-            onChange={(e) => setClientEmail(e.target.value)} disabled={loading}
-            className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal focus:ring-1 focus:ring-teal transition disabled:opacity-60" />
+          {selectedClientId && (
+            <p className="text-xs text-good flex items-center gap-1"><Check size={11} /> Using existing client</p>
+          )}
+          {clientMatches.length > 0 && (
+            <div className="absolute z-10 top-full left-0 right-0 bg-surface border border-border rounded-md card-shadow mt-1 overflow-hidden">
+              {clientMatches.map((c) => (
+                <button key={c.id} type="button" onClick={() => selectExistingClient(c)}
+                  className="block w-full text-left px-3.5 py-2 text-sm text-ink hover:bg-teal-soft transition">
+                  {c.full_name} <span className="text-xs text-ink-muted">— use existing</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <input placeholder="Client email (optional)" type="email" value={clientEmail}
+          onChange={(e) => setClientEmail(e.target.value)} disabled={loading || !!selectedClientId}
+          className="border border-border rounded-md px-3.5 py-2.5 w-full bg-paper text-ink text-sm focus:outline-none focus:border-teal focus:ring-1 focus:ring-teal transition disabled:opacity-60 mb-4" />
+
+        <div className="mb-6">
+          <p className="text-xs font-mono text-ink-muted uppercase tracking-widest mb-2">Meeting attendees (optional)</p>
+          {attendees.length > 0 && (
+            <div className="space-y-1.5 mb-2">
+              {attendees.map((a, i) => (
+                <div key={i} className="flex items-center justify-between bg-paper border border-border rounded-md px-3 py-2 text-sm">
+                  <span className="text-ink">{a.name}{a.email ? ` — ${a.email}` : ""}</span>
+                  <button type="button" onClick={() => removeAttendee(i)}><X size={13} className="text-ink-muted hover:text-warn" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2 mb-1.5">
+            <input placeholder="Name" value={attendeeName} onChange={(e) => setAttendeeName(e.target.value)} disabled={loading}
+              className="border border-border rounded-md px-3 py-2 text-sm bg-paper text-ink focus:outline-none focus:border-teal disabled:opacity-60" />
+            <input placeholder="Email (optional)" value={attendeeEmail} onChange={(e) => setAttendeeEmail(e.target.value)} disabled={loading}
+              className="border border-border rounded-md px-3 py-2 text-sm bg-paper text-ink focus:outline-none focus:border-teal disabled:opacity-60" />
+          </div>
+          <div className="flex gap-2">
+            <input placeholder="Phone (optional)" value={attendeePhone} onChange={(e) => setAttendeePhone(e.target.value)} disabled={loading}
+              className="border border-border rounded-md px-3 py-2 text-sm bg-paper text-ink flex-1 focus:outline-none focus:border-teal disabled:opacity-60" />
+            <button type="button" onClick={addAttendee} disabled={loading || !attendeeName.trim()}
+              className="flex items-center gap-1 text-xs bg-teal-soft text-teal px-3 py-2 rounded-md hover:opacity-80 transition disabled:opacity-40">
+              <Plus size={13} /> Add
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col items-center gap-3 mb-5">
           {!recording && !audioUrl && (
-  <div className="flex gap-3">
-    <button type="button" onClick={startRecording} disabled={loading}
-      className="flex flex-col items-center gap-1.5 disabled:opacity-40">
-      <span className="w-14 h-14 rounded-full bg-warn text-paper flex items-center justify-center hover:opacity-90 transition">
-        <Mic size={20} />
-      </span>
-      <span className="text-xs text-ink-muted">Mic only</span>
-    </button>
-    <button type="button" onClick={startMeetingRecording} disabled={loading}
-      className="flex flex-col items-center gap-1.5 disabled:opacity-40">
-      <span className="w-14 h-14 rounded-full bg-teal text-paper flex items-center justify-center hover:opacity-90 transition">
-        <Monitor size={20} />
-      </span>
-      <span className="text-xs text-ink-muted">Record Zoom/Teams</span>
-    </button>
-  </div>
-)}
+            <button type="button" onClick={startRecording} disabled={loading}
+              className="w-14 h-14 rounded-full bg-warn text-paper flex items-center justify-center hover:opacity-90 transition disabled:opacity-40">
+              <Mic size={20} />
+            </button>
+          )}
           {recording && (
             <>
               <button type="button" onClick={stopRecording}
