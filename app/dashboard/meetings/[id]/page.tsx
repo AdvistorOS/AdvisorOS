@@ -18,10 +18,19 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
     .from("internal_notes").select("payload").eq("meeting_id", id).single();
 
   const isFailed = meeting?.status === "failed";
-  const isProcessing = meeting?.status === "transcribing" || meeting?.status === "extracting" || meeting?.status === "uploaded";
+  const isProcessing = ["uploaded", "transcribing", "extracting", "summarizing"].includes(meeting?.status ?? "");
+
+  const statusLabel: Record<string, string> = {
+    uploaded: "Preparing…",
+    transcribing: "Creating transcript…",
+    extracting: "Starting analysis…",
+    summarizing: "Extracting information…",
+  };
 
   return (
     <main className="max-w-2xl mx-auto px-8 py-10 space-y-8">
+      {isProcessing && <AutoRefresh meetingId={id} status={meeting?.status ?? ""} />}
+
       <div className="flex items-start justify-between">
         <Link href="/dashboard/meetings" className="text-ink-muted hover:text-teal transition flex items-center gap-1.5 text-sm">
           <ArrowLeft size={16} /> Back
@@ -44,10 +53,9 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
         </section>
       )}
 
-      {isProcessing && <AutoRefresh />}
       {isProcessing && (
         <section className="bg-teal-soft border border-teal/20 rounded-xl p-6">
-          <p className="text-sm text-ink">Processing — {meeting.status === "transcribing" ? "creating transcript…" : "extracting information…"}</p>
+          <p className="text-sm text-ink">Processing — {statusLabel[meeting?.status ?? ""] ?? "working…"}</p>
         </section>
       )}
 
