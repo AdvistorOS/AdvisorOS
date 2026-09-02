@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  LayoutDashboard, Calendar, CalendarDays, Mic, Users, CheckSquare, Search,
+  LayoutDashboard, Calendar, CalendarDays, Mic, Users, CheckSquare, Search, GraduationCap,
   Settings, User, ChevronUp, LogOut, Menu, X,
 } from "lucide-react";
 
@@ -16,6 +16,7 @@ const NAV = [
   { label: "New Meeting", href: "/dashboard/record", icon: Mic },
   { label: "Clients", href: "/dashboard/clients", icon: Users },
   { label: "Tasks", href: "/dashboard/tasks", icon: CheckSquare },
+  { label: "Coaching", href: "/dashboard/coaching", icon: GraduationCap },
 ];
 
 export function Sidebar({ email }: { email: string }) {
