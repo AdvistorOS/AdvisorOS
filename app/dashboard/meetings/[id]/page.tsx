@@ -111,6 +111,42 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
         </section>
       )}
 
+      {facts?.payload?.scorecard && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <p className="font-mono text-xs text-ink-muted uppercase tracking-widest">Meeting scorecard</p>
+          </div>
+          {facts.payload.objective_assessment?.summary && (
+            <div className="bg-teal-soft border border-teal/20 rounded-xl p-5 mb-3">
+              <p className="text-xs font-mono text-teal uppercase tracking-widest mb-1.5">
+                Objective: {facts.payload.objective_assessment.achieved === "yes" ? "Achieved" : facts.payload.objective_assessment.achieved === "partially" ? "Partially achieved" : facts.payload.objective_assessment.achieved === "no" ? "Not achieved" : "Not set"}
+              </p>
+              <p className="text-sm text-ink">{facts.payload.objective_assessment.summary}</p>
+              {facts.payload.objective_assessment.what_helped && (
+                <p className="text-xs text-good mt-2">Helped: {facts.payload.objective_assessment.what_helped}</p>
+              )}
+              {facts.payload.objective_assessment.what_hindered && (
+                <p className="text-xs text-warn mt-1">Hindered: {facts.payload.objective_assessment.what_hindered}</p>
+              )}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2.5">
+            {Object.entries(facts.payload.scorecard).filter(([k]) => k !== "overall").map(([key, value]: [string, any]) => (
+              <div key={key} className="bg-surface border border-border rounded-lg px-4 py-3 card-shadow">
+                <p className="text-xs text-ink-muted capitalize">{key.replace(/_/g, " ")}</p>
+                <p className="font-display text-xl text-ink">{value}<span className="text-xs text-ink-muted">/10</span></p>
+              </div>
+            ))}
+          </div>
+          {typeof facts.payload.scorecard.overall === "number" && (
+            <div className="bg-ink text-paper rounded-lg px-4 py-3 mt-2.5 flex items-center justify-between">
+              <p className="text-sm">Overall</p>
+              <p className="font-display text-xl">{facts.payload.scorecard.overall}<span className="text-xs opacity-70">/10</span></p>
+            </div>
+          )}
+        </section>
+      )}
+
       {facts?.payload && (
         <section>
           <div className="flex items-center gap-2 mb-3">
