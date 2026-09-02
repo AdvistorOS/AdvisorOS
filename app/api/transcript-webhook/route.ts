@@ -44,6 +44,9 @@ export async function POST(req: Request) {
       return Response.json({ step: "empty transcript", error: "No speech detected." }, { status: 500 });
     }
 
+    // Always clear any existing transcript row for this meeting first — retries
+    // must never leave more than one row behind, or .single() lookups downstream break.
+    await supabaseAdmin.from("transcripts").delete().eq("meeting_id", meetingId);
     await supabaseAdmin.from("transcripts").insert({
       meeting_id: meetingId, full_text: transcriptText, utterances: transcriptData.utterances,
     });

@@ -26,16 +26,21 @@ export async function POST(req: Request) {
   const { data: meeting } = await supabaseAdmin
     .from("meetings").select("status, client_id, advisers(firm_id)").eq("id", meetingId).single();
 
-  // Lock: only proceed if still at 'extracting'. Any repeat trigger (browser
-  // polling multiple times) will see 'summarizing' or 'done' and no-op.
   if (!meeting || meeting.status !== "extracting") {
     return Response.json({ ok: true, skipped: true });
   }
   await supabaseAdmin.from("meetings").update({ status: "summarizing" }).eq("id", meetingId);
 
-  const { data: transcriptRow } = await supabaseAdmin
-    .from("transcripts").select("full_text").eq("meeting_id", meetingId).single();
-  const transcriptText = transcriptRow?.full_text ?? "";
+  // Fetch the most recent transcript row explicitly, in case duplicates ever
+  // exist — never rely on .single() here, since that throws on more than one row.
+  const { data: transcriptRows } = await supabaseAdmin
+    .from("transcripts").select("full_text").eq("meeting_id", meetingId).order("id", { ascending: false }).limit(1);
+  const transcriptText = transcriptRows?.[0]?.full_text ?? "";
+
+  if (!transcriptText || transcriptText.trim().length < 10) {
+    await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
+    return Response.json({ step: "load transcript", error: "No transcript text found for this meeting." }, { status: 500 });
+  }
 
   let practiceType = "wealth_management";
   const firmId = (meeting as any).advisers?.firm_id;
@@ -120,8 +125,10 @@ in GBP unless stated otherwise. Do not invent information.`,
   }
 
   try {
+    await supabaseAdmin.from("extracted_facts").delete().eq("meeting_id", meetingId);
     await supabaseAdmin.from("extracted_facts").insert({ meeting_id: meetingId, category: "facts", payload: facts });
     if (facts.client_sentiment) {
+      await supabaseAdmin.from("internal_notes").delete().eq("meeting_id", meetingId);
       await supabaseAdmin.from("internal_notes").insert({ meeting_id: meetingId, type: "sentiment", payload: facts.client_sentiment });
     }
     await supabaseAdmin.from("meetings").update({ status: "done", client_summary: summary }).eq("id", meetingId);
