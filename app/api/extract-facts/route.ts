@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   const { data: meeting } = await supabaseAdmin
     .from("meetings").select("status, client_id, advisers(firm_id)").eq("id", meetingId).single();
 
-  if (!meeting || meeting.status !== "extracting") {
+  if (!meeting || (meeting.status !== "extracting" && meeting.status !== "summarizing")) {
     return Response.json({ ok: true, skipped: true });
   }
   await supabaseAdmin.from("meetings").update({ status: "summarizing" }).eq("id", meetingId);

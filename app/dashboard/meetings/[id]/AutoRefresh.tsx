@@ -6,16 +6,14 @@ export function AutoRefresh({ meetingId, status, intervalMs = 5000 }: { meetingI
   const router = useRouter();
 
   useEffect(() => {
-    // Safe to call repeatedly — the server only actually processes once
-    // (it flips status away from 'extracting' immediately) and skips otherwise.
-    // Retrying here just recovers from a dropped request instead of getting stuck forever.
-    if (status === "extracting") {
+    // Retry from either 'extracting' or 'summarizing' — if a previous attempt
+    // died mid-flight (timeout, dropped request), this recovers it instead of
+    // leaving the meeting permanently stuck with no way forward.
+    if (status === "extracting" || status === "summarizing") {
       fetch("/api/extract-facts", {
         method: "POST",
         body: JSON.stringify({ meetingId }),
-      }).catch(() => {
-        // Silently ignore — next poll cycle will retry automatically.
-      });
+      }).catch(() => {});
     }
   }, [status, meetingId]);
 
