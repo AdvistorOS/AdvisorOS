@@ -13,12 +13,18 @@ export async function POST(req: Request) {
   const { firmId, brandColor, brandAccent, brandLogoUrl } = await req.json();
   if (!firmId) return Response.json({ error: "firmId required" }, { status: 400 });
 
-  const { error } = await supabaseAdmin.from("firms").update({
+  const { data: updated, error } = await supabaseAdmin.from("firms").update({
     brand_color: brandColor || null,
     brand_accent: brandAccent || null,
     brand_logo_url: brandLogoUrl || null,
-  }).eq("id", firmId);
+  }).eq("id", firmId).select();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
-  return Response.json({ ok: true });
+
+  return Response.json({
+    ok: true,
+    receivedFirmId: firmId,
+    rowsUpdated: updated?.length ?? 0,
+    updatedRow: updated,
+  });
 }
