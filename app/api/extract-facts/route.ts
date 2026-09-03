@@ -109,14 +109,16 @@ information as raw JSON matching this exact shape, nothing else, no markdown fen
     "what_hindered": "Short phrase or empty string"
   },
   "scorecard": {
-    "discovery": { "score": 0, "reason": "One sentence citing specific evidence from the transcript for this score" },
-    "question_quality": { "score": 0, "reason": "One sentence citing specific evidence" },
-    "listening": { "score": 0, "reason": "One sentence citing specific evidence" },
-    "objection_handling": { "score": 0, "reason": "One sentence citing specific evidence" },
-    "commercial_positioning": { "score": 0, "reason": "One sentence citing specific evidence" },
-    "client_engagement": { "score": 0, "reason": "One sentence citing specific evidence" },
-    "next_step_clarity": { "score": 0, "reason": "One sentence citing specific evidence" },
-    "overall": { "score": 0, "reason": "One sentence on the holistic judgment behind this number" }
+    "discovery": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
+    "question_quality": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
+    "listening": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
+    "objection_handling": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
+    "commercial_positioning": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
+    "client_engagement": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
+    "next_step_clarity": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
+    "talk_ratio": { "score": 0, "reason": "Who dominated the conversation and whether that served the meeting", "improve": "One concrete thing to do differently" },
+    "rapport": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
+    "overall": { "score": 0, "reason": "The holistic judgment behind this number", "improve": "The single highest-impact change" }
   },
   "stage_timeline": [
     { "time": "mm:ss", "stage": "Introduction | Discovery | Problem Recognition | Commercial | Objection | Resolution | Buying Signal | Next Step", "note": "Short phrase" }
@@ -126,7 +128,11 @@ information as raw JSON matching this exact shape, nothing else, no markdown fen
   }
 }
 
-Score scorecard fields 0-10 honestly based on evidence, not a flattering default. Every scorecard
+Score 0-10 using this scale, applied strictly: 0-3 = genuinely poor, damaged the meeting.
+4-5 = below standard, missed clear opportunities. 6-7 = competent, did the job. 8-9 = strong,
+actively advanced the outcome. 10 = exceptional, reserve for genuinely rare execution. Most
+competent meetings should land 6-7 — do not inflate. Every "reason" cites something specific
+from the transcript. Every "improve" is concrete and actionable, never generic advice. Every scorecard
 "reason" must cite something SPECIFIC from the transcript — not a generic statement. Use REAL
 timestamps from the transcript for both timelines. stage_timeline: max 8 entries. sentiment
 timeline: max 5 entries per speaker. STRICT LIMITS elsewhere: max 10 fields, max 5
