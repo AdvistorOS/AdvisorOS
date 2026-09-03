@@ -8,6 +8,8 @@ import { AutoRefresh } from "./AutoRefresh";
 import { WhoIsWho } from "./WhoIsWho";
 import { MeetingAudioPlayer } from "./MeetingAudioPlayer";
 import { StageTimeline } from "./StageTimeline";
+import { SentimentGraph } from "./SentimentGraph";
+import { TranscriptViewer } from "./TranscriptViewer";
 import { CustomAnalysis } from "./CustomAnalysis";
 import { MomentAnalysis } from "./MomentAnalysis";
 import { CrmUpdate } from "./CrmUpdate";
@@ -20,6 +22,13 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
     .from("meetings").select("*, clients(id, full_name, email)").eq("id", id).single();
   const { data: facts } = await supabase
     .from("extracted_facts").select("payload, reviewed").eq("meeting_id", id).single();
+  const { data: attendeeRows } = await supabase
+    .from("meeting_attendees").select("speaker_label, contacts(full_name)").eq("meeting_id", id);
+  const attendeeNames: Record<string, string> = {};
+  for (const a of attendeeRows ?? []) {
+    if (a.speaker_label) attendeeNames[a.speaker_label] = (a.contacts as any)?.full_name ?? "";
+  }
+
   const { data: notes } = await supabase
     .from("internal_notes").select("payload").eq("meeting_id", id).single();
 
@@ -95,6 +104,12 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
       {meeting?.status === "done" && <MeetingAudioPlayer meetingId={id} />}
 
       {facts?.payload?.stage_timeline && <StageTimeline stages={facts.payload.stage_timeline} />}
+
+      {facts?.payload?.speaker_sentiment_timeline && (
+        <SentimentGraph speakerSentiment={facts.payload.speaker_sentiment_timeline} attendeeNames={attendeeNames} />
+      )}
+
+      {meeting?.status === "done" && <TranscriptViewer meetingId={id} attendeeNames={attendeeNames} />}
 
       {meeting?.client_summary && (
         <section className="bg-surface border border-border rounded-xl p-7 card-shadow">
