@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell } from "recharts";
 import { TrendingUp, Target, Users, Gauge } from "lucide-react";
 import { LoadingDots } from "../LoadingDots";
+import { OverallInsights } from "./OverallInsights";
 
 const SENTIMENT_VALUE: Record<string, number> = { unhappy: 0, neutral: 1, positive: 2 };
 const SENTIMENT_COLOR = ["#B85630", "#C9971E", "#2E7D5E"];
@@ -108,6 +109,8 @@ export default function OverallAnalyticsPage() {
           <p className="font-display text-2xl text-ink">{stats.avgScore}<span className="text-sm text-ink-muted">/10</span></p>
         </div>
       </div>
+
+      <OverallInsights />
 
       <div className="bg-surface border border-border rounded-xl p-5 card-shadow">
         <p className="text-xs text-ink-muted mb-1">Performance curve</p>
