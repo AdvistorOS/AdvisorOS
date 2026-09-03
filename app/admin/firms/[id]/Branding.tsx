@@ -51,11 +51,7 @@ export function Branding({ firmId, firmName }: { firmId: string; firmName: strin
     });
     const data = await res.json();
     setSaving(false);
-    if (res.ok) {
-      setSaved(true);
-      setError(`DEBUG: ${JSON.stringify(data)}`);
-      setTimeout(() => setSaved(false), 4000);
-    }
+    if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 2000); }
     else setError(`Save failed: ${data.error ?? "unknown error"} (status ${res.status})`);
   }
 
