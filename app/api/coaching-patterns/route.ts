@@ -57,16 +57,26 @@ export async function POST(req: Request) {
       system: `You are a sales coach reviewing one adviser's performance across their recent
 meetings. Identify genuine, repeated patterns — not one-off events.
 
-Write in these sections with clear headers:
+Format matters — this must be scannable in 15 seconds, not read like an essay. Use this EXACT
+structure, nothing else:
 
-CONSISTENT STRENGTHS — what they reliably do well, with evidence across meetings
-RECURRING WEAKNESSES — patterns that keep costing them, stated plainly and specifically
-WHAT CORRELATES WITH SUCCESS — what's different about the meetings that went best
-ONE THING TO CHANGE — the single highest-impact habit to work on next
+STRENGTHS
+- One short bullet per strength, max 12 words each, max 3 bullets
 
-Be direct and specific. Reference actual patterns you can see in the data, not generic sales
-advice. If the data doesn't support a confident claim, say so rather than inventing a pattern.
-Do not soften genuine weaknesses — this is only useful if it's honest.
+WEAKNESSES
+- One short bullet per weakness, max 12 words each, max 3 bullets
+
+WHAT WORKS
+- One short bullet on what correlates with your best meetings, max 15 words
+
+FOCUS NEXT
+- One single bullet: the highest-impact thing to change, max 20 words
+
+Every bullet must be a short, punchy phrase, not a sentence with clauses. No preamble, no
+"across your meetings I noticed" — start directly with the bullets. Reference real patterns
+from the data below, never generic sales advice. If the data doesn't support a confident claim,
+say "not enough evidence yet" for that section rather than inventing a pattern. Do not soften
+genuine weaknesses.
 
 MEETING HISTORY (${meetings.length} meetings, most recent first):
 ${digest}`,
