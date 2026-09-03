@@ -21,12 +21,20 @@ const NAV = [
   { label: "Team", href: "/dashboard/team", icon: UsersRound },
 ];
 
-export function Sidebar({ email }: { email: string }) {
+export function Sidebar({ email, brandColor, brandAccent, logoUrl }: {
+  email: string;
+  brandColor?: string;
+  brandAccent?: string;
+  logoUrl?: string | null;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const color = brandColor || "#0B5C52";
+  const accent = brandAccent || "#C9971E";
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -41,7 +49,11 @@ export function Sidebar({ email }: { email: string }) {
   const content = (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2.5 px-5 py-5">
-        <img src="/logo-mark.svg" alt="" width={30} height={30} className="rounded-md" />
+        {logoUrl ? (
+          <img src={logoUrl} alt="" className="h-8 w-auto max-w-[36px] object-contain rounded-md" />
+        ) : (
+          <img src="/logo-mark.svg" alt="" width={30} height={30} className="rounded-md" />
+        )}
         <span className="font-display text-lg text-ink tracking-tight">AdvisorOS</span>
       </div>
 
@@ -51,8 +63,9 @@ export function Sidebar({ email }: { email: string }) {
           const Icon = item.icon;
           return (
             <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)}
+              style={active ? { backgroundColor: color, color: "#FFFFFF" } : undefined}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition
-                ${active ? "bg-teal text-paper" : "text-ink-muted hover:bg-teal-soft hover:text-ink"}`}>
+                ${active ? "" : "text-ink-muted hover:bg-teal-soft hover:text-ink"}`}>
               <Icon size={17} strokeWidth={2} />
               {item.label}
             </Link>
@@ -63,8 +76,8 @@ export function Sidebar({ email }: { email: string }) {
       <div className="px-3 pb-3 relative">
         <button onClick={() => setMenuOpen(!menuOpen)}
           className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg hover:bg-teal-soft transition">
-          <div className="w-8 h-8 rounded-full bg-teal-soft flex items-center justify-center flex-shrink-0">
-            <User size={14} className="text-teal" />
+          <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${accent}30` }}>
+            <User size={14} style={{ color: accent }} />
           </div>
           <div className="flex-1 min-w-0 text-left">
             <p className="text-xs text-ink truncate">{email}</p>

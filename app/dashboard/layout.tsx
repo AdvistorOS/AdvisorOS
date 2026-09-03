@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { Sidebar } from "./Sidebar";
 import { ToastProvider } from "./ToastProvider";
 import { OfflineBanner } from "./OfflineBanner";
@@ -7,13 +8,31 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
+  let brandColor = "#0B5C52";
+  let brandAccent = "#C9971E";
+  let logoUrl: string | null = null;
+
+  if (user) {
+    const { data: adviser } = await supabaseAdmin
+      .from("advisers").select("firm_id").eq("id", user.id).single();
+    if (adviser?.firm_id) {
+      const { data: firm } = await supabaseAdmin
+        .from("firms").select("brand_color, brand_accent, brand_logo_url").eq("id", adviser.firm_id).single();
+      if (firm?.brand_color) brandColor = firm.brand_color;
+      if (firm?.brand_accent) brandAccent = firm.brand_accent;
+      if (firm?.brand_logo_url) logoUrl = firm.brand_logo_url;
+    }
+  }
+
   return (
-    <ToastProvider>
-      <OfflineBanner />
-      <div className="flex min-h-screen bg-paper">
-        <Sidebar email={user?.email ?? ""} />
-        <div className="flex-1 min-w-0">{children}</div>
-      </div>
-    </ToastProvider>
+    <div style={{ "--brand-color": brandColor, "--brand-accent": brandAccent } as React.CSSProperties}>
+      <ToastProvider>
+        <OfflineBanner />
+        <div className="flex min-h-screen bg-paper">
+          <Sidebar email={user?.email ?? ""} brandColor={brandColor} brandAccent={brandAccent} logoUrl={logoUrl} />
+          <div className="flex-1 min-w-0">{children}</div>
+        </div>
+      </ToastProvider>
+    </div>
   );
 }
