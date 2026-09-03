@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Mic, Square, UploadCloud, FileAudio, Loader2, RotateCw, Plus, X, Check, Monitor } from "lucide-react";
+import { ArrowLeft, Mic, Square, UploadCloud, FileAudio, Loader2, RotateCw, Plus, X, Check, Monitor, FileText } from "lucide-react";
 import Link from "next/link";
 import { withRetry } from "@/lib/retry";
 
@@ -24,6 +24,7 @@ export default function RecordPage() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [docxFile, setDocxFile] = useState<File | null>(null);
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -90,6 +91,7 @@ export default function RecordPage() {
   async function startMicRecording() {
     setStatus("");
     setFile(null);
+    setDocxFile(null);
     setRecordError("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -103,9 +105,9 @@ export default function RecordPage() {
   async function startSystemRecording() {
     setStatus("");
     setFile(null);
+    setDocxFile(null);
     setRecordError("");
     try {
-      // Captures the shared tab/window's audio (e.g. a Zoom/Teams call playing in browser)
       const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       const systemAudioTracks = displayStream.getAudioTracks();
       if (!systemAudioTracks.length) {
@@ -121,8 +123,6 @@ export default function RecordPage() {
         // Mic is optional here — system audio alone still works if mic access is denied
       }
 
-      // Mix system audio + mic (if available) into a single stream using Web Audio API,
-      // so both sides of the call are captured together.
       const audioContext = new AudioContext();
       audioContextRef.current = audioContext;
       const destination = audioContext.createMediaStreamDestination();
@@ -136,7 +136,6 @@ export default function RecordPage() {
       }
 
       activeStreamsRef.current = micStream ? [displayStream, micStream] : [displayStream];
-      // Stop the video track immediately — we only need audio, no need to keep capturing video
       displayStream.getVideoTracks().forEach((t) => t.stop());
 
       beginRecordingFrom(destination.stream, "system");
@@ -179,6 +178,14 @@ export default function RecordPage() {
 
   function handleFileChoose(f: File | null) {
     setFile(f);
+    setDocxFile(null);
+    setAudioBlob(null);
+    setAudioUrl("");
+  }
+
+  function handleDocxChoose(f: File | null) {
+    setDocxFile(f);
+    setFile(null);
     setAudioBlob(null);
     setAudioUrl("");
   }
@@ -187,6 +194,94 @@ export default function RecordPage() {
     if (mime.includes("mp4")) return "m4a";
     if (mime.includes("webm")) return "webm";
     return "audio";
+  }
+
+  async function resolveClientAndAttendees(user: any) {
+    let clientId = selectedClientId;
+    if (!clientId) {
+      const { data: existing } = await supabase.from("clients").select("id")
+        .ilike("full_name", clientName.trim()).maybeSingle();
+      if (existing) {
+        clientId = existing.id;
+      } else {
+        const { data: newClient, error: clientErr } = await supabase
+          .from("clients")
+          .insert({ full_name: clientName.trim(), email: clientEmail.trim() || null, adviser_id: user.id })
+          .select().single();
+        if (clientErr) throw new Error("Client insert error: " + clientErr.message);
+        clientId = newClient.id;
+      }
+    }
+
+    const attendeeContactIds: string[] = [];
+    for (const a of attendees) {
+      const { data: existingContact } = await supabase.from("contacts").select("id")
+        .eq("client_id", clientId).ilike("full_name", a.name).maybeSingle();
+      if (existingContact) {
+        attendeeContactIds.push(existingContact.id);
+      } else {
+        const { data: newContact } = await supabase.from("contacts")
+          .insert({ client_id: clientId, full_name: a.name, email: a.email || null, phone: a.phone || null })
+          .select().single();
+        if (newContact) attendeeContactIds.push(newContact.id);
+      }
+    }
+
+    return { clientId, attendeeContactIds };
+  }
+
+  async function handleDocxSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!docxFile) return;
+    setLoading(true);
+    setFailed(false);
+
+    try {
+      setStatus("Getting user...");
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !user) { setStatus("Auth error: " + (userErr?.message ?? "no user")); setLoading(false); setFailed(true); return; }
+
+      const { clientId, attendeeContactIds } = await resolveClientAndAttendees(user);
+
+      setStatus("Reading document...");
+      const formData = new FormData();
+      formData.append("file", docxFile);
+      const extractRes = await fetch("/api/extract-docx", { method: "POST", body: formData });
+      const extractData = await extractRes.json();
+      if (!extractRes.ok) { setStatus("Document error: " + extractData.error); setLoading(false); setFailed(true); return; }
+
+      setStatus("Creating meeting record...");
+      const { data: meeting, error: meetingErr } = await supabase
+        .from("meetings")
+        .insert({ client_id: clientId, adviser_id: user.id, source_type: "transcript", objective: objective.trim() || null, status: "transcribing" })
+        .select().single();
+      if (meetingErr) { setStatus("Meeting insert error: " + meetingErr.message); setLoading(false); setFailed(true); return; }
+
+      if (attendeeContactIds.length) {
+        await supabase.from("meeting_attendees").insert(
+          attendeeContactIds.map((contact_id) => ({ meeting_id: meeting.id, contact_id }))
+        );
+      }
+
+      setStatus("Submitted — analysing transcript...");
+      const res = await fetch("/api/process-transcript", {
+        method: "POST",
+        body: JSON.stringify({ meetingId: meeting.id, transcriptText: extractData.text }),
+      });
+
+      if (res.ok) {
+        router.push(`/dashboard/meetings/${meeting.id}`);
+      } else {
+        const body = await res.text();
+        setStatus("Processing failed: " + body);
+        setLoading(false);
+        setFailed(true);
+      }
+    } catch (err: any) {
+      setStatus("Unexpected error: " + err.message);
+      setLoading(false);
+      setFailed(true);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -202,36 +297,7 @@ export default function RecordPage() {
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (userErr || !user) { setStatus("Auth error: " + (userErr?.message ?? "no user")); setLoading(false); setFailed(true); return; }
 
-      let clientId = selectedClientId;
-      if (!clientId) {
-        const { data: existing } = await supabase.from("clients").select("id")
-          .ilike("full_name", clientName.trim()).maybeSingle();
-        if (existing) {
-          clientId = existing.id;
-        } else {
-          setStatus("Creating client record...");
-          const { data: newClient, error: clientErr } = await supabase
-            .from("clients")
-            .insert({ full_name: clientName.trim(), email: clientEmail.trim() || null, adviser_id: user.id })
-            .select().single();
-          if (clientErr) { setStatus("Client insert error: " + clientErr.message); setLoading(false); setFailed(true); return; }
-          clientId = newClient.id;
-        }
-      }
-
-      const attendeeContactIds: string[] = [];
-      for (const a of attendees) {
-        const { data: existingContact } = await supabase.from("contacts").select("id")
-          .eq("client_id", clientId).ilike("full_name", a.name).maybeSingle();
-        if (existingContact) {
-          attendeeContactIds.push(existingContact.id);
-        } else {
-          const { data: newContact } = await supabase.from("contacts")
-            .insert({ client_id: clientId, full_name: a.name, email: a.email || null, phone: a.phone || null })
-            .select().single();
-          if (newContact) attendeeContactIds.push(newContact.id);
-        }
-      }
+      const { clientId, attendeeContactIds } = await resolveClientAndAttendees(user);
 
       setStatus(audioBlob ? "Uploading recording..." : "Uploading file...");
       const fileName = file ? file.name : `recording.${extForMime(mimeTypeRef.current)}`;
@@ -267,7 +333,7 @@ export default function RecordPage() {
       setStatus("Creating meeting record...");
       const { data: meeting, error: meetingErr } = await supabase
         .from("meetings")
-        .insert({ client_id: clientId, adviser_id: user.id, media_url: signedData.signedUrl, media_path: filePath, objective: objective.trim() || null })
+        .insert({ client_id: clientId, adviser_id: user.id, media_url: signedData.signedUrl, media_path: filePath, source_type: "audio", objective: objective.trim() || null })
         .select().single();
       if (meetingErr) { setStatus("Meeting insert error: " + meetingErr.message); setLoading(false); setFailed(true); return; }
 
@@ -298,7 +364,7 @@ export default function RecordPage() {
     }
   }
 
-  const hasSource = !!(audioBlob || file);
+  const hasAudioSource = !!(audioBlob || file);
 
   return (
     <main className="max-w-md mx-auto px-8 py-16">
@@ -311,7 +377,7 @@ export default function RecordPage() {
           <Mic size={20} className="text-teal" strokeWidth={2} />
         </div>
         <h1 className="font-display text-2xl text-ink mb-1">New meeting</h1>
-        <p className="text-ink-muted text-sm mb-6">Record live, or upload a file — whichever's easier right now.</p>
+        <p className="text-ink-muted text-sm mb-6">Record live, upload a file, or upload a written transcript.</p>
 
         <div className="space-y-1 mb-2 relative">
           <input placeholder="Client / company name" required value={clientName}
@@ -370,83 +436,126 @@ export default function RecordPage() {
           </div>
         </div>
 
-        <div className="flex flex-col items-center gap-3 mb-2">
-          {!recording && !audioUrl && (
-            <div className="flex items-center gap-6">
-              <button type="button" onClick={startMicRecording} disabled={loading}
-                className="w-14 h-14 rounded-full bg-warn text-paper flex items-center justify-center hover:opacity-90 transition disabled:opacity-40" title="Mic only">
-                <Mic size={20} />
-              </button>
-              <button type="button" onClick={startSystemRecording} disabled={loading}
-                className="w-14 h-14 rounded-full bg-teal text-paper flex items-center justify-center hover:opacity-90 transition disabled:opacity-40" title="Record Zoom/Teams">
-                <Monitor size={20} />
-              </button>
+        {!docxFile && (
+          <>
+            <div className="flex flex-col items-center gap-3 mb-2">
+              {!recording && !audioUrl && (
+                <div className="flex items-center gap-6">
+                  <button type="button" onClick={startMicRecording} disabled={loading}
+                    className="w-14 h-14 rounded-full bg-warn text-paper flex items-center justify-center hover:opacity-90 transition disabled:opacity-40" title="Mic only">
+                    <Mic size={20} />
+                  </button>
+                  <button type="button" onClick={startSystemRecording} disabled={loading}
+                    className="w-14 h-14 rounded-full bg-teal text-paper flex items-center justify-center hover:opacity-90 transition disabled:opacity-40" title="Record Zoom/Teams">
+                    <Monitor size={20} />
+                  </button>
+                </div>
+              )}
+              {!recording && !audioUrl && (
+                <div className="flex items-center gap-6 text-center">
+                  <p className="text-xs text-ink-muted w-14">Mic only</p>
+                  <p className="text-xs text-ink-muted w-14">Record Zoom/Teams</p>
+                </div>
+              )}
+              {recording && (
+                <>
+                  <button type="button" onClick={stopRecording}
+                    className="w-14 h-14 rounded-full bg-ink text-paper flex items-center justify-center hover:opacity-90 transition animate-pulse">
+                    <Square size={18} />
+                  </button>
+                  <p className="font-mono text-sm text-warn">{formatTime(seconds)} · Recording {recordMode === "system" ? "call" : "mic"}…</p>
+                </>
+              )}
+              {audioUrl && !recording && (
+                <div className="w-full space-y-1.5">
+                  <audio src={audioUrl} controls className="w-full" />
+                  <button type="button" onClick={() => { setAudioBlob(null); setAudioUrl(""); }} disabled={loading}
+                    className="text-xs text-ink-muted hover:text-warn transition">
+                    Discard and re-record
+                  </button>
+                </div>
+              )}
+              {!recording && !audioUrl && <p className="text-xs text-ink-muted">Tap to start recording</p>}
+              {recordError && <p className="text-xs text-warn text-center">{recordError}</p>}
             </div>
-          )}
-          {!recording && !audioUrl && (
-            <div className="flex items-center gap-6 text-center">
-              <p className="text-xs text-ink-muted w-14">Mic only</p>
-              <p className="text-xs text-ink-muted w-14">Record Zoom/Teams</p>
+
+            <div className="flex items-center gap-3 mb-5 mt-3">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-ink-muted">or</span>
+              <div className="flex-1 h-px bg-border" />
             </div>
-          )}
-          {recording && (
-            <>
-              <button type="button" onClick={stopRecording}
-                className="w-14 h-14 rounded-full bg-ink text-paper flex items-center justify-center hover:opacity-90 transition animate-pulse">
-                <Square size={18} />
-              </button>
-              <p className="font-mono text-sm text-warn">{formatTime(seconds)} · Recording {recordMode === "system" ? "call" : "mic"}…</p>
-            </>
-          )}
-          {audioUrl && !recording && (
-            <div className="w-full space-y-1.5">
-              <audio src={audioUrl} controls className="w-full" />
-              <button type="button" onClick={() => { setAudioBlob(null); setAudioUrl(""); }} disabled={loading}
-                className="text-xs text-ink-muted hover:text-warn transition">
-                Discard and re-record
-              </button>
+
+            <label className={`flex items-center gap-3 border border-dashed border-border rounded-md px-3.5 py-3 transition mb-3
+              ${loading || recording ? "opacity-50" : "cursor-pointer hover:border-teal"}`}>
+              <FileAudio size={18} className="text-ink-muted flex-shrink-0" />
+              <span className="text-sm text-ink-muted truncate">{file ? file.name : "Choose an audio or video file"}</span>
+              <input type="file" accept="audio/*,video/*" disabled={loading || recording}
+                onChange={(e) => handleFileChoose(e.target.files?.[0] ?? null)}
+                className="hidden" />
+            </label>
+          </>
+        )}
+
+        {!hasAudioSource && !recording && (
+          <>
+            <div className="flex items-center gap-3 mb-3 mt-1">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-ink-muted">or</span>
+              <div className="flex-1 h-px bg-border" />
             </div>
-          )}
-          {!recording && !audioUrl && <p className="text-xs text-ink-muted">Tap to start recording</p>}
-          {recordError && <p className="text-xs text-warn text-center">{recordError}</p>}
-        </div>
 
-        <div className="flex items-center gap-3 mb-5 mt-3">
-          <div className="flex-1 h-px bg-border" />
-          <span className="text-xs text-ink-muted">or</span>
-          <div className="flex-1 h-px bg-border" />
-        </div>
+            <label className={`flex items-center gap-3 border border-dashed border-border rounded-md px-3.5 py-3 transition mb-2
+              ${loading ? "opacity-50" : "cursor-pointer hover:border-teal"}`}>
+              <FileText size={18} className="text-ink-muted flex-shrink-0" />
+              <span className="text-sm text-ink-muted truncate">{docxFile ? docxFile.name : "Upload a written transcript (.docx)"}</span>
+              <input type="file" accept=".docx" disabled={loading}
+                onChange={(e) => handleDocxChoose(e.target.files?.[0] ?? null)}
+                className="hidden" />
+            </label>
+            {docxFile && (
+              <p className="text-xs text-brass mb-4">Transcript documents skip speaker identification, timelines, and playback — only text-based analysis (facts, scorecard, coaching, CRM) applies.</p>
+            )}
+          </>
+        )}
 
-        <label className={`flex items-center gap-3 border border-dashed border-border rounded-md px-3.5 py-3 transition mb-6
-          ${loading || recording ? "opacity-50" : "cursor-pointer hover:border-teal"}`}>
-          <FileAudio size={18} className="text-ink-muted flex-shrink-0" />
-          <span className="text-sm text-ink-muted truncate">{file ? file.name : "Choose an audio or video file"}</span>
-          <input type="file" accept="audio/*,video/*" disabled={loading || recording}
-            onChange={(e) => handleFileChoose(e.target.files?.[0] ?? null)}
-            className="hidden" />
-        </label>
+        {docxFile ? (
+          <form onSubmit={handleDocxSubmit} className="mt-3">
+            <button type="submit" disabled={loading || !clientName}
+              className="bg-teal text-paper text-sm font-medium rounded-md px-3 py-2.5 w-full hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2">
+              {loading && <Loader2 size={15} className="animate-spin" />}
+              {failed && !loading && <RotateCw size={14} />}
+              {loading ? "Processing…" : failed ? "Retry" : "Upload transcript & process"}
+            </button>
+            {status && (
+              <p className="font-mono text-xs text-ink-muted break-all pt-2 flex items-start gap-1.5">
+                {loading && <Loader2 size={11} className="animate-spin flex-shrink-0 mt-0.5" />}
+                <span>{status}</span>
+              </p>
+            )}
+          </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="mt-3">
+            <button type="submit" disabled={loading || !hasAudioSource || !clientName}
+              className="bg-teal text-paper text-sm font-medium rounded-md px-3 py-2.5 w-full hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2">
+              {loading && <Loader2 size={15} className="animate-spin" />}
+              {failed && !loading && <RotateCw size={14} />}
+              {loading ? "Processing…" : failed ? "Retry" : "Upload & process"}
+            </button>
 
-        <form onSubmit={handleSubmit}>
-          <button type="submit" disabled={loading || !hasSource || !clientName}
-            className="bg-teal text-paper text-sm font-medium rounded-md px-3 py-2.5 w-full hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2">
-            {loading && <Loader2 size={15} className="animate-spin" />}
-            {failed && !loading && <RotateCw size={14} />}
-            {loading ? "Processing…" : failed ? "Retry" : "Upload & process"}
-          </button>
+            {loading && progress > 0 && progress < 100 && (
+              <div className="w-full h-1.5 bg-border rounded-full overflow-hidden mt-3">
+                <div className="h-full bg-teal transition-all duration-300 ease-out" style={{ width: `${Math.min(progress, 95)}%` }} />
+              </div>
+            )}
 
-          {loading && progress > 0 && progress < 100 && (
-            <div className="w-full h-1.5 bg-border rounded-full overflow-hidden mt-3">
-              <div className="h-full bg-teal transition-all duration-300 ease-out" style={{ width: `${Math.min(progress, 95)}%` }} />
-            </div>
-          )}
-
-          {status && (
-            <p className="font-mono text-xs text-ink-muted break-all pt-2 flex items-start gap-1.5">
-              {loading && <Loader2 size={11} className="animate-spin flex-shrink-0 mt-0.5" />}
-              <span>{status}</span>
-            </p>
-          )}
-        </form>
+            {status && (
+              <p className="font-mono text-xs text-ink-muted break-all pt-2 flex items-start gap-1.5">
+                {loading && <Loader2 size={11} className="animate-spin flex-shrink-0 mt-0.5" />}
+                <span>{status}</span>
+              </p>
+            )}
+          </form>
+        )}
       </div>
     </main>
   );
