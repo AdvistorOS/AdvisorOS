@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Users, Check, Loader2 } from "lucide-react";
+import { Users, Check, Loader2, Sparkles } from "lucide-react";
 import { useToast } from "@/app/dashboard/ToastProvider";
+import { extractSpeakerClip } from "@/lib/speaker-audio";
 
 type Attendee = { id: string; contact_id: string; speaker_label: string | null; contacts: { full_name: string } };
 
@@ -12,11 +13,17 @@ export function WhoIsWho({ meetingId }: { meetingId: string }) {
   const [speakers, setSpeakers] = useState<string[]>([]);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [autoMatched, setAutoMatched] = useState<Record<string, string>>({}); // speaker -> confidence
   const [saving, setSaving] = useState(false);
+  const [identifying, setIdentifying] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [clientId, setClientId] = useState("");
 
   useEffect(() => {
     async function load() {
+      const { data: meeting } = await supabase.from("meetings").select("client_id").eq("id", meetingId).single();
+      if (meeting?.client_id) setClientId(meeting.client_id);
+
       const { data: transcript } = await supabase.from("transcripts").select("utterances").eq("meeting_id", meetingId).order("id", { ascending: false }).limit(1).maybeSingle();
       const utterances = (transcript?.utterances as any[]) ?? [];
       const uniqueSpeakers = Array.from(new Set(utterances.map((u) => u.speaker))).filter(Boolean).sort();
@@ -38,6 +45,45 @@ export function WhoIsWho({ meetingId }: { meetingId: string }) {
     load();
   }, [meetingId]);
 
+  async function handleAutoIdentify() {
+    setIdentifying(true);
+    try {
+      const { data: meeting } = await supabase.from("meetings").select("media_path, media_url").eq("id", meetingId).single();
+      let audioUrl = meeting?.media_url;
+      if (meeting?.media_path) {
+        const res = await fetch("/api/media-url", { method: "POST", body: JSON.stringify({ meetingId }) });
+        const data = await res.json();
+        audioUrl = data.url;
+      }
+      if (!audioUrl) { toast("No recording available to identify from", "error"); setIdentifying(false); return; }
+
+      const { data: transcript } = await supabase.from("transcripts").select("utterances").eq("meeting_id", meetingId).order("id", { ascending: false }).limit(1).maybeSingle();
+      const utterances = (transcript?.utterances as any[]) ?? [];
+
+      let matchedCount = 0;
+      for (const speaker of speakers) {
+        if (mapping[speaker]) continue; // already mapped, skip
+        const clip = await extractSpeakerClip(audioUrl, utterances, speaker);
+        if (!clip) continue;
+
+        const formData = new FormData();
+        formData.append("clientId", clientId);
+        formData.append("audio", clip, "clip.wav");
+        const res = await fetch("/api/voice/identify", { method: "POST", body: formData });
+        const data = await res.json();
+        if (data.match) {
+          setMapping((prev) => ({ ...prev, [speaker]: data.match.contactId }));
+          setAutoMatched((prev) => ({ ...prev, [speaker]: data.match.confidence }));
+          matchedCount++;
+        }
+      }
+      toast(matchedCount > 0 ? `Identified ${matchedCount} speaker${matchedCount !== 1 ? "s" : ""} — please confirm below` : "No confident matches found — enroll voices first, or map manually");
+    } catch (e: any) {
+      toast("Identification failed: " + e.message, "error");
+    }
+    setIdentifying(false);
+  }
+
   async function handleSave() {
     setSaving(true);
     for (const [speakerLabel, contactId] of Object.entries(mapping)) {
@@ -48,7 +94,6 @@ export function WhoIsWho({ meetingId }: { meetingId: string }) {
     setSaving(false);
     toast("Speaker mapping saved");
 
-    // Kick off per-contact profile analysis now that we know who's who
     fetch("/api/analyze-contacts", {
       method: "POST",
       body: JSON.stringify({ meetingId }),
@@ -62,11 +107,18 @@ export function WhoIsWho({ meetingId }: { meetingId: string }) {
 
   return (
     <section className="bg-surface border border-border rounded-xl p-6 card-shadow">
-      <div className="flex items-center gap-2 mb-1">
-        <Users size={15} className="text-teal" />
-        <p className="font-mono text-xs text-teal uppercase tracking-widest">Who's who</p>
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <Users size={15} className="text-teal" />
+          <p className="font-mono text-xs text-teal uppercase tracking-widest">Who's who</p>
+        </div>
+        <button onClick={handleAutoIdentify} disabled={identifying}
+          className="flex items-center gap-1.5 bg-teal-soft text-teal text-xs font-medium px-3 py-1.5 rounded-md hover:opacity-80 transition disabled:opacity-50">
+          {identifying ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+          {identifying ? "Identifying…" : "Auto-identify"}
+        </button>
       </div>
-      <p className="text-xs text-ink-muted mb-4">Match each detected speaker to who they actually are, so their profile builds correctly over time.</p>
+      <p className="text-xs text-ink-muted mb-4">Match each detected speaker to who they actually are — or let voice recognition suggest it, then confirm below.</p>
 
       <div className="space-y-2.5 mb-4">
         {speakers.map((speaker) => (
@@ -79,6 +131,11 @@ export function WhoIsWho({ meetingId }: { meetingId: string }) {
                 <option key={a.contact_id} value={a.contact_id}>{a.contacts?.full_name}</option>
               ))}
             </select>
+            {autoMatched[speaker] && (
+              <span className="text-[10px] font-mono text-good bg-good-soft px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                {autoMatched[speaker]} match
+              </span>
+            )}
           </div>
         ))}
       </div>
