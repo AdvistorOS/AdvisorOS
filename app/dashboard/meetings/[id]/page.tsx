@@ -8,6 +8,8 @@ import { AutoRefresh } from "./AutoRefresh";
 import { WhoIsWho } from "./WhoIsWho";
 import { MeetingAudioPlayer } from "./MeetingAudioPlayer";
 import { StageTimeline } from "./StageTimeline";
+import { MeetingTabs } from "./MeetingTabs";
+import { ExtractedFacts } from "./ExtractedFacts";
 import { SentimentGraph } from "./SentimentGraph";
 import { TranscriptViewer } from "./TranscriptViewer";
 import { CustomAnalysis } from "./CustomAnalysis";
@@ -177,17 +179,7 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
         </section>
       )}
 
-      {facts?.payload && (
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <ListChecks size={16} className="text-ink-muted" />
-            <p className="font-mono text-xs text-ink-muted uppercase tracking-widest">Extracted facts</p>
-          </div>
-          <pre className="font-mono text-xs bg-surface border border-border rounded-xl p-5 overflow-x-auto text-ink-muted card-shadow">
-            {JSON.stringify(facts.payload, null, 2)}
-          </pre>
-        </section>
-      )}
+      
     </main>
   );
 }

@@ -108,7 +108,8 @@ export function AdviserRow({ adviser, firms }: { adviser: Adviser; firms: Firm[]
             </div>
           ) : (
             <>
-              <button onClick={() => setConfirmingRemove(true)} title="Remove access (keeps their data)"
+              <button onClick={() => { if (confirm(`Revoke login access for ${adviser.full_name}? They will not be able to sign in until re-enabled.`)) setConfirmingRemove(true); }}
+                title="Remove access (keeps their data)"
                 className="text-warn hover:opacity-70 transition p-1.5">
                 <UserMinus size={14} />
               </button>
