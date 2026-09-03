@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  LayoutDashboard, Calendar, CalendarDays, Mic, Users, CheckSquare, Search, GraduationCap,
+  LayoutDashboard, Calendar, CalendarDays, Mic, Users, CheckSquare, Search, GraduationCap, LineChart,
   Settings, User, ChevronUp, LogOut, Menu, X,
 } from "lucide-react";
 
@@ -17,6 +17,7 @@ const NAV = [
   { label: "Clients", href: "/dashboard/clients", icon: Users },
   { label: "Tasks", href: "/dashboard/tasks", icon: CheckSquare },
   { label: "Coaching", href: "/dashboard/coaching", icon: GraduationCap },
+  { label: "Overall Stats", href: "/dashboard/analytics", icon: LineChart },
 ];
 
 export function Sidebar({ email }: { email: string }) {
