@@ -7,6 +7,7 @@ import { AskClientAI } from "./AskClientAI";
 import { PrepBrief } from "./PrepBrief";
 import { CrmStatus } from "./CrmStatus";
 import { ClientDashboard } from "./ClientDashboard";
+import { ClientAnalytics } from "./ClientAnalytics";
 import { ClientTimeline } from "./ClientTimeline";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -70,6 +71,8 @@ export default async function ClientRecord({ params }: { params: Promise<{ id: s
       <PrepBrief clientId={id} />
 
       <ClientDashboard clientId={id} />
+
+      <ClientAnalytics clientId={id} />
 
       <AskClientAI clientId={id} />
 
