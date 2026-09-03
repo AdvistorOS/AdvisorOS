@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { Branding } from "./Branding";
 import { ArrowLeft, UserPlus, UserMinus, Copy, Check, Trash2 } from "lucide-react";
 
 export default function FirmDetailPage() {
@@ -107,6 +108,8 @@ export default function FirmDetailPage() {
         </div>
 
         <p className="font-display text-2xl text-ink text-center">{firm?.name ?? "…"}</p>
+
+        <Branding firmId={id} firmName={firm?.name ?? ""} />
 
         <div className="bg-surface border border-border rounded-xl p-6 card-shadow">
           <div className="flex items-center gap-2 mb-4">

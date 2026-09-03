@@ -193,6 +193,13 @@ figures in GBP unless stated otherwise.`,
       await supabaseAdmin.from("internal_notes").insert({ meeting_id: meetingId, type: "sentiment", payload: facts.client_sentiment });
     }
     await supabaseAdmin.from("meetings").update({ status: "done", client_summary: summary }).eq("id", meetingId);
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://advisor-os-fawn.vercel.app";
+    fetch(`${appUrl}/api/flag-language`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meetingId }),
+    }).catch(() => {});
   } catch (e: any) {
     await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
     return Response.json({ step: "save results", error: e.message ?? String(e) }, { status: 500 });
