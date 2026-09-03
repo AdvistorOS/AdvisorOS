@@ -6,6 +6,8 @@ import { MoveMeetingButton } from "./MoveMeetingButton";
 import { RetryButton } from "./RetryButton";
 import { AutoRefresh } from "./AutoRefresh";
 import { WhoIsWho } from "./WhoIsWho";
+import { MeetingAudioPlayer } from "./MeetingAudioPlayer";
+import { StageTimeline } from "./StageTimeline";
 import { CustomAnalysis } from "./CustomAnalysis";
 import { MomentAnalysis } from "./MomentAnalysis";
 import { CrmUpdate } from "./CrmUpdate";
@@ -89,6 +91,10 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
       {meeting?.status === "done" && <MomentAnalysis meetingId={id} />}
 
       {meeting?.status === "done" && <CustomAnalysis meetingId={id} />}
+
+      {meeting?.status === "done" && <MeetingAudioPlayer meetingId={id} />}
+
+      {facts?.payload?.stage_timeline && <StageTimeline stages={facts.payload.stage_timeline} />}
 
       {meeting?.client_summary && (
         <section className="bg-surface border border-border rounded-xl p-7 card-shadow">

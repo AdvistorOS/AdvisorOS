@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Swords, Loader2, RefreshCw } from "lucide-react";
+import { jumpToTimestamp } from "./MeetingAudioPlayer";
 
 const STYLES: Record<string, { label: string; cls: string }> = {
   brilliant: { label: "Brilliant", cls: "bg-good-soft border-good/30 text-good" },
@@ -70,7 +71,10 @@ export function MomentAnalysis({ meetingId }: { meetingId: string }) {
                 <span className={`font-mono text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border ${s.cls}`}>
                   {s.label}
                 </span>
-                <span className="font-mono text-xs text-ink-muted">{m.time}</span>
+                <button onClick={() => jumpToTimestamp(m.time)}
+                  className="font-mono text-xs text-teal underline hover:opacity-70 transition">
+                  ▶ {m.time}
+                </button>
               </div>
               <p className="text-sm text-ink font-medium mb-1">{m.what_happened}</p>
               {m.excerpt && <p className="text-xs text-ink-muted italic mb-1.5">"{m.excerpt}"</p>}

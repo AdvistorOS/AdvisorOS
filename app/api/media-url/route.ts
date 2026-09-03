@@ -14,7 +14,6 @@ export async function POST(req: Request) {
   if (!meeting || meeting.adviser_id !== user.id) return Response.json({ error: "not found" }, { status: 404 });
 
   if (!meeting.media_path) {
-    // Old meeting recorded before this fix — fall back to the stored URL, which may already be dead.
     return Response.json({ url: meeting.media_url, permanent: false });
   }
 
