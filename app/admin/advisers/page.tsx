@@ -15,7 +15,7 @@ export default async function AllAdvisersPage() {
   if (!isAdmin) redirect("/dashboard");
 
   const { data: advisers } = await supabaseAdmin
-    .from("advisers").select("id, full_name, email, firm_id").order("full_name");
+    .from("advisers").select("id, full_name, email, firm_id, role").order("full_name");
   const { data: firms } = await supabaseAdmin.from("firms").select("id, name").order("name");
 
   return (
@@ -24,12 +24,10 @@ export default async function AllAdvisersPage() {
         <Link href="/admin" className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-teal transition">
           <ArrowLeft size={13} /> Admin
         </Link>
-
         <div className="flex items-center gap-2 justify-center">
           <Users size={18} className="text-teal" />
           <p className="font-display text-xl text-ink">All advisers ({advisers?.length ?? 0})</p>
         </div>
-
         <div className="space-y-2">
           {advisers?.map((a) => (
             <AdviserRow key={a.id} adviser={a} firms={firms ?? []} />

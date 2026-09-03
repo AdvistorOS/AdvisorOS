@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import { UserMinus, Trash2, X, UserPlus2 } from "lucide-react";
 
 type Firm = { id: string; name: string };
-type Adviser = { id: string; full_name: string; email: string; firm_id: string | null };
+type Adviser = { id: string; full_name: string; email: string; firm_id: string | null; role?: string | null };
 
 export function AdviserRow({ adviser, firms }: { adviser: Adviser; firms: Firm[] }) {
   const router = useRouter();
   const [firmId, setFirmId] = useState(adviser.firm_id ?? "");
+  const [role, setRole] = useState(adviser.role ?? "adviser");
+  const [savingRole, setSavingRole] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -30,6 +32,17 @@ export function AdviserRow({ adviser, firms }: { adviser: Adviser; firms: Firm[]
       body: JSON.stringify({ adviserId: adviser.id, firmId: newFirmId }),
     });
     setSaving(false);
+    router.refresh();
+  }
+
+  async function handleRoleChange(newRole: string) {
+    setRole(newRole);
+    setSavingRole(true);
+    await fetch("/api/admin/set-role", {
+      method: "POST",
+      body: JSON.stringify({ adviserId: adviser.id, role: newRole }),
+    });
+    setSavingRole(false);
     router.refresh();
   }
 
@@ -78,17 +91,24 @@ export function AdviserRow({ adviser, firms }: { adviser: Adviser; firms: Firm[]
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 bg-surface border border-border rounded-lg px-4 py-3 card-shadow">
+      <div className="flex items-center justify-between gap-3 bg-surface border border-border rounded-lg px-4 py-3 card-shadow flex-wrap">
         <div className="min-w-0 flex-shrink-0">
           <p className="text-sm text-ink truncate">{adviser.full_name}</p>
           <p className="text-xs text-ink-muted truncate">{adviser.email}</p>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
           <select value={firmId} onChange={(e) => handleFirmChange(e.target.value)} disabled={saving}
             className="border border-border rounded-md px-2 py-1.5 text-xs bg-paper text-ink focus:outline-none focus:border-teal disabled:opacity-50">
             <option value="">No firm</option>
             {firms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+
+          <select value={role} onChange={(e) => handleRoleChange(e.target.value)} disabled={savingRole}
+            title="Managers can see their whole firm's performance and flags on the Team page"
+            className="border border-border rounded-md px-2 py-1.5 text-xs bg-paper text-ink focus:outline-none focus:border-teal disabled:opacity-50">
+            <option value="adviser">Adviser</option>
+            <option value="manager">Manager</option>
           </select>
 
           <button onClick={() => setAddClientModal(true)} title="Add a client for this adviser"
