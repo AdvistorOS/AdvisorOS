@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { ArrowLeft, FileText, ShieldAlert, ListChecks, ClipboardCheck } from "lucide-react";
+import { ArrowLeft, FileText, ShieldAlert, ClipboardCheck } from "lucide-react";
 import { DeleteButton } from "./DeleteButton";
 import { MoveMeetingButton } from "./MoveMeetingButton";
 import { RetryButton } from "./RetryButton";
@@ -35,6 +35,7 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
     .from("internal_notes").select("payload").eq("meeting_id", id).single();
 
   const isFailed = meeting?.status === "failed";
+  const isDone = meeting?.status === "done";
   const isProcessing = ["uploaded", "transcribing", "extracting", "summarizing"].includes(meeting?.status ?? "");
 
   const statusLabel: Record<string, string> = {
@@ -44,74 +45,12 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
     summarizing: "Extracting information…",
   };
 
-  return (
-    <main className="max-w-2xl mx-auto px-8 py-10 space-y-8">
-      {isProcessing && <AutoRefresh meetingId={id} status={meeting?.status ?? ""} />}
+  const sc = facts?.payload?.scorecard;
+  const oa = facts?.payload?.objective_assessment;
 
-      <div className="flex items-start justify-between">
-        <Link href="/dashboard/meetings" className="text-ink-muted hover:text-teal transition flex items-center gap-1.5 text-sm">
-          <ArrowLeft size={16} /> Back
-        </Link>
-        <div className="flex items-center gap-4">
-          <MoveMeetingButton meetingId={id} currentClientId={meeting?.clients?.id} />
-          <DeleteButton meetingId={id} />
-        </div>
-      </div>
-
-      <div>
-        <p className="font-mono text-xs text-ink-muted uppercase tracking-widest">Client</p>
-        <h1 className="font-display text-3xl text-ink mt-1">{meeting?.clients?.full_name}</h1>
-      </div>
-
-      {isFailed && (
-        <section className="bg-warn-soft border border-warn/20 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm text-ink font-medium">This meeting failed to process.</p>
-            <RetryButton meetingId={id} />
-          </div>
-          <p className="text-xs text-ink-muted">
-            Automatic retries were already attempted and didn't succeed — this is a genuine failure,
-            not a false alarm. Check your Anthropic account has available credit, then retry.
-          </p>
-        </section>
-      )}
-
-      {isProcessing && (
-        <section className="bg-teal-soft border border-teal/20 rounded-xl p-6">
-          <p className="text-sm text-ink">Processing — {statusLabel[meeting?.status ?? ""] ?? "working…"}</p>
-          {(meeting?.status === "extracting" || meeting?.status === "summarizing") && (
-            <p className="text-xs text-ink-muted mt-1">
-              This page retries automatically in the background — no action needed. Leave it open.
-            </p>
-          )}
-        </section>
-      )}
-
-      {meeting?.status === "done" && (
-        <Link href={`/dashboard/meetings/${id}/review`}
-          className="flex items-center justify-center gap-2 bg-teal text-paper text-sm font-medium rounded-md px-4 py-2.5 hover:opacity-90 transition card-shadow">
-          <ClipboardCheck size={16} />
-          {facts?.reviewed ? "View review" : "Review this meeting"}
-        </Link>
-      )}
-
-      {meeting?.status === "done" && <WhoIsWho meetingId={id} />}
-
-      {meeting?.status === "done" && <CrmUpdate meetingId={id} />}
-
-      {meeting?.status === "done" && <MomentAnalysis meetingId={id} />}
-
-      {meeting?.status === "done" && <CustomAnalysis meetingId={id} />}
-
-      {meeting?.status === "done" && <MeetingAudioPlayer meetingId={id} />}
-
-      {facts?.payload?.stage_timeline && <StageTimeline stages={facts.payload.stage_timeline} />}
-
-      {facts?.payload?.speaker_sentiment_timeline && (
-        <SentimentGraph speakerSentiment={facts.payload.speaker_sentiment_timeline} attendeeNames={attendeeNames} />
-      )}
-
-      {meeting?.status === "done" && <TranscriptViewer meetingId={id} attendeeNames={attendeeNames} />}
+  const overviewTab = (
+    <>
+      {isDone && <MeetingAudioPlayer meetingId={id} />}
 
       {meeting?.client_summary && (
         <section className="bg-surface border border-border rounded-xl p-7 card-shadow">
@@ -122,6 +61,47 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
           <p className="text-ink leading-relaxed whitespace-pre-wrap text-[15px]">{meeting.client_summary}</p>
         </section>
       )}
+
+      {sc && (
+        <section>
+          <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-3">Meeting scorecard</p>
+          {oa?.summary && (
+            <div className="bg-teal-soft border border-teal/20 rounded-xl p-5 mb-3">
+              <p className="text-xs font-mono text-teal uppercase tracking-widest mb-1.5">
+                Objective: {oa.achieved === "yes" ? "Achieved" : oa.achieved === "partially" ? "Partially achieved" : oa.achieved === "no" ? "Not achieved" : "Not set"}
+              </p>
+              <p className="text-sm text-ink">{oa.summary}</p>
+              {oa.what_helped && <p className="text-xs text-good mt-2">Helped: {oa.what_helped}</p>}
+              {oa.what_hindered && <p className="text-xs text-warn mt-1">Hindered: {oa.what_hindered}</p>}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2.5">
+            {Object.entries(sc).filter(([k]) => k !== "overall").map(([key, value]: [string, any]) => (
+              <div key={key} className="bg-surface border border-border rounded-lg px-4 py-3 card-shadow">
+                <p className="text-xs text-ink-muted capitalize">{key.replace(/_/g, " ")}</p>
+                <p className="font-display text-xl text-ink">{value}<span className="text-xs text-ink-muted">/10</span></p>
+              </div>
+            ))}
+          </div>
+          {typeof sc.overall === "number" && (
+            <div className="bg-ink text-paper rounded-lg px-4 py-3 mt-2.5 flex items-center justify-between">
+              <p className="text-sm">Overall</p>
+              <p className="font-display text-xl">{sc.overall}<span className="text-xs opacity-70">/10</span></p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {facts?.payload && <ExtractedFacts payload={facts.payload} />}
+    </>
+  );
+
+  const analysisTab = (
+    <>
+      {facts?.payload?.stage_timeline && <StageTimeline stages={facts.payload.stage_timeline} />}
+      {isDone && <MomentAnalysis meetingId={id} />}
+      {isDone && <CrmUpdate meetingId={id} />}
+      {isDone && <CustomAnalysis meetingId={id} />}
 
       {notes?.payload && (
         <section className="bg-brass-soft/40 border border-brass/20 rounded-xl p-7">
@@ -142,44 +122,84 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
           )}
         </section>
       )}
+    </>
+  );
 
-      {facts?.payload?.scorecard && (
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <p className="font-mono text-xs text-ink-muted uppercase tracking-widest">Meeting scorecard</p>
+  const peopleTab = (
+    <>
+      {isDone && <WhoIsWho meetingId={id} />}
+      {facts?.payload?.speaker_sentiment_timeline && (
+        <SentimentGraph speakerSentiment={facts.payload.speaker_sentiment_timeline} attendeeNames={attendeeNames} />
+      )}
+    </>
+  );
+
+  const transcriptTab = (
+    <>
+      {isDone && <MeetingAudioPlayer meetingId={id} />}
+      {isDone && <TranscriptViewer meetingId={id} attendeeNames={attendeeNames} />}
+    </>
+  );
+
+  return (
+    <main className="max-w-2xl mx-auto px-8 py-10 space-y-6">
+      {isProcessing && <AutoRefresh meetingId={id} status={meeting?.status ?? ""} />}
+
+      <div className="flex items-start justify-between">
+        <Link href="/dashboard/meetings" className="text-ink-muted hover:text-teal transition flex items-center gap-1.5 text-sm">
+          <ArrowLeft size={16} /> Back
+        </Link>
+        <div className="flex items-center gap-4">
+          <MoveMeetingButton meetingId={id} currentClientId={meeting?.clients?.id} />
+          <DeleteButton meetingId={id} />
+        </div>
+      </div>
+
+      <div>
+        <p className="font-mono text-xs text-ink-muted uppercase tracking-widest">Client</p>
+        <h1 className="font-display text-3xl text-ink mt-1">{meeting?.clients?.full_name}</h1>
+        {meeting?.objective && <p className="text-sm text-ink-muted mt-1">Objective: {meeting.objective}</p>}
+      </div>
+
+      {isFailed && (
+        <section className="bg-warn-soft border border-warn/20 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm text-ink font-medium">This meeting failed to process.</p>
+            <RetryButton meetingId={id} />
           </div>
-          {facts.payload.objective_assessment?.summary && (
-            <div className="bg-teal-soft border border-teal/20 rounded-xl p-5 mb-3">
-              <p className="text-xs font-mono text-teal uppercase tracking-widest mb-1.5">
-                Objective: {facts.payload.objective_assessment.achieved === "yes" ? "Achieved" : facts.payload.objective_assessment.achieved === "partially" ? "Partially achieved" : facts.payload.objective_assessment.achieved === "no" ? "Not achieved" : "Not set"}
-              </p>
-              <p className="text-sm text-ink">{facts.payload.objective_assessment.summary}</p>
-              {facts.payload.objective_assessment.what_helped && (
-                <p className="text-xs text-good mt-2">Helped: {facts.payload.objective_assessment.what_helped}</p>
-              )}
-              {facts.payload.objective_assessment.what_hindered && (
-                <p className="text-xs text-warn mt-1">Hindered: {facts.payload.objective_assessment.what_hindered}</p>
-              )}
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-2.5">
-            {Object.entries(facts.payload.scorecard).filter(([k]) => k !== "overall").map(([key, value]: [string, any]) => (
-              <div key={key} className="bg-surface border border-border rounded-lg px-4 py-3 card-shadow">
-                <p className="text-xs text-ink-muted capitalize">{key.replace(/_/g, " ")}</p>
-                <p className="font-display text-xl text-ink">{value}<span className="text-xs text-ink-muted">/10</span></p>
-              </div>
-            ))}
-          </div>
-          {typeof facts.payload.scorecard.overall === "number" && (
-            <div className="bg-ink text-paper rounded-lg px-4 py-3 mt-2.5 flex items-center justify-between">
-              <p className="text-sm">Overall</p>
-              <p className="font-display text-xl">{facts.payload.scorecard.overall}<span className="text-xs opacity-70">/10</span></p>
-            </div>
+          <p className="text-xs text-ink-muted">
+            Automatic retries were already attempted and didn't succeed. Check your Anthropic account has available credit, then retry.
+          </p>
+        </section>
+      )}
+
+      {isProcessing && (
+        <section className="bg-teal-soft border border-teal/20 rounded-xl p-6">
+          <p className="text-sm text-ink">Processing — {statusLabel[meeting?.status ?? ""] ?? "working…"}</p>
+          {(meeting?.status === "extracting" || meeting?.status === "summarizing") && (
+            <p className="text-xs text-ink-muted mt-1">
+              This page retries automatically in the background — no action needed. Leave it open.
+            </p>
           )}
         </section>
       )}
 
-      
+      {isDone && (
+        <Link href={`/dashboard/meetings/${id}/review`}
+          className="flex items-center justify-center gap-2 bg-teal text-paper text-sm font-medium rounded-md px-4 py-2.5 hover:opacity-90 transition card-shadow">
+          <ClipboardCheck size={16} />
+          {facts?.reviewed ? "View review" : "Review this meeting"}
+        </Link>
+      )}
+
+      {isDone ? (
+        <MeetingTabs
+          overview={overviewTab}
+          analysis={analysisTab}
+          people={peopleTab}
+          transcript={transcriptTab}
+        />
+      ) : null}
     </main>
   );
 }
