@@ -74,7 +74,7 @@ export async function POST(req: Request) {
 
   const extractionPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 3072,
+    max_tokens: 4096,
     system: `You are assisting ${domainContext}. Known about this client already:
 
 ${knownFactsText}
@@ -104,13 +104,19 @@ information as raw JSON matching this exact shape, nothing else, no markdown fen
   },
   "objective_assessment": {
     "achieved": "yes | partially | no | null",
-    "summary": "One or two sentences",
+    "summary": "Two to three sentences",
     "what_helped": "Short phrase or empty string",
     "what_hindered": "Short phrase or empty string"
   },
   "scorecard": {
-    "discovery": 0, "question_quality": 0, "listening": 0, "objection_handling": 0,
-    "commercial_positioning": 0, "client_engagement": 0, "next_step_clarity": 0, "overall": 0
+    "discovery": { "score": 0, "reason": "One sentence citing specific evidence from the transcript for this score" },
+    "question_quality": { "score": 0, "reason": "One sentence citing specific evidence" },
+    "listening": { "score": 0, "reason": "One sentence citing specific evidence" },
+    "objection_handling": { "score": 0, "reason": "One sentence citing specific evidence" },
+    "commercial_positioning": { "score": 0, "reason": "One sentence citing specific evidence" },
+    "client_engagement": { "score": 0, "reason": "One sentence citing specific evidence" },
+    "next_step_clarity": { "score": 0, "reason": "One sentence citing specific evidence" },
+    "overall": { "score": 0, "reason": "One sentence on the holistic judgment behind this number" }
   },
   "stage_timeline": [
     { "time": "mm:ss", "stage": "Introduction | Discovery | Problem Recognition | Commercial | Objection | Resolution | Buying Signal | Next Step", "note": "Short phrase" }
@@ -120,21 +126,31 @@ information as raw JSON matching this exact shape, nothing else, no markdown fen
   }
 }
 
-Score scorecard fields 0-10 honestly based on evidence, not a flattering default. Use REAL
-timestamps from the transcript for both timelines — never invent times. Key
-speaker_sentiment_timeline by the speaker labels that actually appear (A, B, C...). stage_timeline:
-max 8 entries, only genuine shifts. speaker_sentiment_timeline: max 5 entries per speaker, only
-genuine tone shifts. Keep both short for short meetings — do not pad. STRICT LIMITS elsewhere:
-max 8 fields, max 5 attention_items, max 3 life_events, max 5 action_items. All monetary figures
-in GBP unless stated otherwise. Do not invent information. Output ONLY the raw JSON object,
-complete and valid, nothing else.`,
+Score scorecard fields 0-10 honestly based on evidence, not a flattering default. Every scorecard
+"reason" must cite something SPECIFIC from the transcript — not a generic statement. Use REAL
+timestamps from the transcript for both timelines. stage_timeline: max 8 entries. sentiment
+timeline: max 5 entries per speaker. STRICT LIMITS elsewhere: max 10 fields, max 5
+attention_items, max 3 life_events, max 5 action_items. All monetary figures in GBP unless
+stated otherwise. Do not invent information. Output ONLY the raw JSON object, complete and
+valid, nothing else.`,
     messages: [{ role: "user", content: timestampedTranscript }],
   });
 
   const summaryPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 400,
-    system: "Write a summary of this meeting for the client's own records, organized into short sections with clear headers, e.g. 'Topics Discussed', 'Decisions Made', 'Next Steps'. Use 2-4 sentences per section, plain English, real substance and no filler. All monetary figures are in GBP unless stated otherwise.",
+    max_tokens: 900,
+    system: `Write a thorough summary of this meeting for the client's own records. Use clear
+section headers and real substance under each — this should be genuinely useful to read back,
+not a brief overview. Use these sections:
+
+Overview — 2-3 sentences on what this meeting was about and how it went overall
+Topics Discussed — every significant topic covered, with real detail on what was said
+Decisions Made — anything actually agreed or decided
+Concerns Raised — anything the client was worried about or pushed back on
+Next Steps — what happens next and who's responsible
+
+Write in plain English, genuinely informative, not padded with filler phrases. All monetary
+figures in GBP unless stated otherwise.`,
     messages: [{ role: "user", content: transcriptText }],
   });
 

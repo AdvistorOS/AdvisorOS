@@ -25,10 +25,12 @@ export async function POST(req: Request) {
   try {
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: `You are analyzing a meeting transcript based on a specific request from the
-adviser who ran the meeting. Answer their request directly and concisely, based only on what's
-actually in the transcript below. Do not invent information.
+adviser who ran it. Give a thorough, well-organized answer — use clear structure (headers or
+bullet points where it helps readability), cite specific things said in the transcript, and
+don't pad with generic commentary. If the request has multiple parts, address each clearly.
+Base everything only on what's actually in the transcript below — do not invent information.
 
 Transcript:
 ${transcriptText}`,
@@ -36,9 +38,7 @@ ${transcriptText}`,
     });
 
     const result = response.content.find((b) => b.type === "text")?.text ?? "No analysis generated.";
-
     await supabaseAdmin.from("meeting_custom_analyses").insert({ meeting_id: meetingId, prompt, result });
-
     return Response.json({ result });
   } catch (e: any) {
     return Response.json({ error: e.message ?? String(e) }, { status: 500 });

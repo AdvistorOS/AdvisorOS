@@ -15,6 +15,7 @@ import { TranscriptViewer } from "./TranscriptViewer";
 import { CustomAnalysis } from "./CustomAnalysis";
 import { MomentAnalysis } from "./MomentAnalysis";
 import { CrmUpdate } from "./CrmUpdate";
+import { Scorecard } from "./Scorecard";
 
 export default async function MeetingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,10 +26,14 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
   const { data: facts } = await supabase
     .from("extracted_facts").select("payload, reviewed").eq("meeting_id", id).single();
   const { data: attendeeRows } = await supabase
-    .from("meeting_attendees").select("speaker_label, contacts(full_name)").eq("meeting_id", id);
+    .from("meeting_attendees").select("speaker_label, contact_id, contacts(full_name)").eq("meeting_id", id);
   const attendeeNames: Record<string, string> = {};
+  const attendeeContactIds: Record<string, string> = {};
   for (const a of attendeeRows ?? []) {
-    if (a.speaker_label) attendeeNames[a.speaker_label] = (a.contacts as any)?.full_name ?? "";
+    if (a.speaker_label) {
+      attendeeNames[a.speaker_label] = (a.contacts as any)?.full_name ?? "";
+      if (a.contact_id) attendeeContactIds[a.speaker_label] = a.contact_id;
+    }
   }
 
   const { data: notes } = await supabase
@@ -47,18 +52,19 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
 
   const sc = facts?.payload?.scorecard;
   const oa = facts?.payload?.objective_assessment;
+  const scorecardIsRichFormat = sc && typeof sc.discovery === "object";
 
   const overviewTab = (
     <>
       {isDone && <MeetingAudioPlayer meetingId={id} />}
 
       {meeting?.client_summary && (
-        <section className="bg-surface border border-border rounded-xl p-7 card-shadow">
-          <div className="flex items-center gap-2 mb-4">
-            <FileText size={16} className="text-brass" />
+        <section className="bg-surface border border-border rounded-xl p-8 card-shadow">
+          <div className="flex items-center gap-2 mb-5">
+            <FileText size={18} className="text-brass" />
             <p className="font-mono text-xs text-brass uppercase tracking-widest">Meeting summary</p>
           </div>
-          <p className="text-ink leading-relaxed whitespace-pre-wrap text-[15px]">{meeting.client_summary}</p>
+          <div className="text-ink leading-relaxed whitespace-pre-wrap text-base">{meeting.client_summary}</div>
         </section>
       )}
 
@@ -75,19 +81,10 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
               {oa.what_hindered && <p className="text-xs text-warn mt-1">Hindered: {oa.what_hindered}</p>}
             </div>
           )}
-          <div className="grid grid-cols-2 gap-2.5">
-            {Object.entries(sc).filter(([k]) => k !== "overall").map(([key, value]: [string, any]) => (
-              <div key={key} className="bg-surface border border-border rounded-lg px-4 py-3 card-shadow">
-                <p className="text-xs text-ink-muted capitalize">{key.replace(/_/g, " ")}</p>
-                <p className="font-display text-xl text-ink">{value}<span className="text-xs text-ink-muted">/10</span></p>
-              </div>
-            ))}
-          </div>
-          {typeof sc.overall === "number" && (
-            <div className="bg-ink text-paper rounded-lg px-4 py-3 mt-2.5 flex items-center justify-between">
-              <p className="text-sm">Overall</p>
-              <p className="font-display text-xl">{sc.overall}<span className="text-xs opacity-70">/10</span></p>
-            </div>
+          {scorecardIsRichFormat ? (
+            <Scorecard scorecard={sc} />
+          ) : (
+            <p className="text-xs text-ink-muted italic">This meeting was processed before the detailed scorecard was added — reprocess to see reasoning per score.</p>
           )}
         </section>
       )}
@@ -129,7 +126,8 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
     <>
       {isDone && <WhoIsWho meetingId={id} />}
       {facts?.payload?.speaker_sentiment_timeline && (
-        <SentimentGraph speakerSentiment={facts.payload.speaker_sentiment_timeline} attendeeNames={attendeeNames} />
+        <SentimentGraph speakerSentiment={facts.payload.speaker_sentiment_timeline} attendeeNames={attendeeNames}
+          attendeeContactIds={attendeeContactIds} clientId={meeting?.clients?.id ?? ""} />
       )}
     </>
   );
@@ -137,7 +135,8 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
   const transcriptTab = (
     <>
       {isDone && <MeetingAudioPlayer meetingId={id} />}
-      {isDone && <TranscriptViewer meetingId={id} attendeeNames={attendeeNames} />}
+      {isDone && <TranscriptViewer meetingId={id} attendeeNames={attendeeNames}
+        attendeeContactIds={attendeeContactIds} clientId={meeting?.clients?.id ?? ""} />}
     </>
   );
 

@@ -1,6 +1,7 @@
 "use client";
 import { Activity } from "lucide-react";
 import { jumpToTimestamp } from "./MeetingAudioPlayer";
+import { SpeakerBadge } from "./SpeakerBadge";
 
 const SENTIMENT_COLOR: Record<string, string> = {
   positive: "bg-good", engaged: "bg-good", enthusiastic: "bg-good", reassured: "bg-good",
@@ -14,9 +15,11 @@ function colorFor(s: string) {
   return key ? SENTIMENT_COLOR[key] : "bg-teal";
 }
 
-export function SentimentGraph({ speakerSentiment, attendeeNames }: {
+export function SentimentGraph({ speakerSentiment, attendeeNames, attendeeContactIds, clientId }: {
   speakerSentiment: Record<string, { time: string; sentiment: string; note: string }[]>;
   attendeeNames: Record<string, string>;
+  attendeeContactIds: Record<string, string>;
+  clientId: string;
 }) {
   const speakers = Object.keys(speakerSentiment ?? {}).filter((k) => speakerSentiment[k]?.length);
   if (!speakers.length) return null;
@@ -30,10 +33,14 @@ export function SentimentGraph({ speakerSentiment, attendeeNames }: {
       <div className="space-y-5">
         {speakers.map((speakerLabel) => {
           const points = speakerSentiment[speakerLabel];
-          const name = attendeeNames[speakerLabel] ?? `Speaker ${speakerLabel}`;
+          const contactId = attendeeContactIds[speakerLabel];
+          const name = attendeeNames[speakerLabel];
           return (
             <div key={speakerLabel}>
-              <p className="text-sm text-ink font-medium mb-2">{name}</p>
+              <div className="mb-2">
+                <SpeakerBadge speakerLabel={speakerLabel} clientId={clientId}
+                  attendee={contactId ? { contactId, name } : undefined} />
+              </div>
               <div className="flex items-center gap-1">
                 {points.map((p, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1">
