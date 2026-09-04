@@ -9,7 +9,14 @@ import {
   Settings, User, ChevronUp, LogOut, Menu, X,
 } from "lucide-react";
 
-const NAV_GROUPS = [
+type NavItem = {
+  label: string;
+  href: string;
+  icon: any;
+  exact?: boolean;
+};
+
+const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
   {
     label: null,
     items: [
@@ -69,7 +76,7 @@ export function Sidebar({ email, brandColor, brandAccent, logoUrl }: {
     router.push("/login");
   }
 
-  function isActive(item: typeof NAV[number]) {
+  function isActive(item: NavItem) {
     if (item.exact) return pathname === item.href;
     return pathname === item.href || pathname.startsWith(item.href + "/");
   }
