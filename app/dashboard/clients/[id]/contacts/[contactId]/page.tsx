@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { ArrowLeft, User, Heart, Target, AlertCircle, ListChecks, Quote } from "lucide-react";
+import { ContactIntelligence } from "./ContactIntelligence";
+import { VoiceEnroll } from "./VoiceEnroll";
 
 export default async function ContactProfilePage({ params }: { params: Promise<{ id: string; contactId: string }> }) {
   const { id, contactId } = await params;
@@ -28,6 +30,10 @@ export default async function ContactProfilePage({ params }: { params: Promise<{
           <p className="text-xs text-ink-muted">{contact?.email ?? "No email on file"}{contact?.phone ? ` · ${contact.phone}` : ""}</p>
         </div>
       </div>
+
+      <ContactIntelligence contactId={contactId} />
+
+      <VoiceEnroll contactId={contactId} />
 
       {!profile && (
         <div className="border border-dashed border-border rounded-xl py-16 text-center">
