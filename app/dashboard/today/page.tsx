@@ -14,6 +14,7 @@ export default function TodayPage() {
   const [atRisk, setAtRisk] = useState<any[]>([]);
   const [actions, setActions] = useState<any[]>([]);
   const [unreviewed, setUnreviewed] = useState<any[]>([]);
+  const [unresolved, setUnresolved] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
@@ -48,6 +49,16 @@ export default function TodayPage() {
       setStale(staleClients);
       setAtRisk((clients ?? []).filter((c) => c.risk_note));
 
+      const clientIds = (clients ?? []).map((c) => c.id);
+      const { data: unresolvedIntel } = await supabase
+        .from("intelligence_objects")
+        .select("id, label, value, object_type, client_id, clients(full_name), contacts(full_name)")
+        .in("client_id", clientIds.length ? clientIds : ["00000000-0000-0000-0000-000000000000"])
+        .in("temporal_status", ["unresolved", "escalating", "contradicted"])
+        .neq("validation_status", "rejected")
+        .limit(10);
+      setUnresolved(unresolvedIntel ?? []);
+
       const { data: openActions } = await supabase
         .from("actions").select("id, description, owner, client_id, clients(full_name)")
         .eq("status", "open").limit(10);
@@ -66,7 +77,7 @@ export default function TodayPage() {
 
   if (loading) return <main className="max-w-2xl mx-auto px-8"><LoadingDots label="Loading…" /></main>;
 
-  const nothingToDo = !stale.length && !atRisk.length && !actions.length && !unreviewed.length;
+  const nothingToDo = !stale.length && !atRisk.length && !actions.length && !unreviewed.length && !unresolved.length;
 
   return (
     <main className="max-w-2xl mx-auto px-8 py-10 space-y-6">
@@ -94,6 +105,25 @@ export default function TodayPage() {
                   <p className="text-xs text-ink-muted">{new Date(m.created_at).toLocaleDateString()}</p>
                 </div>
                 <ArrowRight size={14} className="text-teal" />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {unresolved.length > 0 && (
+        <section>
+          <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-2">Unresolved across clients</p>
+          <div className="space-y-2">
+            {unresolved.map((u: any) => (
+              <Link key={u.id} href={`/dashboard/clients/${u.client_id}`}
+                className="block bg-brass-soft/40 border border-brass/25 rounded-lg px-4 py-3 hover:opacity-90 transition">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-sm text-ink font-medium">{u.label}</p>
+                  <span className="font-mono text-[10px] text-ink-muted ml-auto">{u.clients?.full_name}</span>
+                </div>
+                <p className="text-xs text-ink-muted">{u.value}</p>
+                {u.contacts?.full_name && <p className="text-[10px] text-ink-muted mt-1">— {u.contacts.full_name}</p>}
               </Link>
             ))}
           </div>

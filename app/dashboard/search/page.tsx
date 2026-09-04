@@ -9,6 +9,7 @@ export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [clientResults, setClientResults] = useState<any[] | null>(null);
   const [meetingResults, setMeetingResults] = useState<any[] | null>(null);
+  const [intelResults, setIntelResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   async function handleSearch(e: React.FormEvent) {
@@ -58,10 +59,19 @@ export default function SearchPage() {
       });
     }
     setMeetingResults(combined);
+
+    const { data: intelHits } = await supabase
+      .from("intelligence_objects")
+      .select("id, label, value, object_type, temporal_status, client_id, meeting_id, clients(full_name)")
+      .or(`label.ilike.%${query}%,value.ilike.%${query}%,evidence_quote.ilike.%${query}%`)
+      .neq("validation_status", "rejected")
+      .limit(15);
+    setIntelResults(intelHits ?? []);
+
     setLoading(false);
   }
 
-  const hasResults = (clientResults?.length ?? 0) > 0 || (meetingResults?.length ?? 0) > 0;
+  const hasResults = (clientResults?.length ?? 0) > 0 || (meetingResults?.length ?? 0) > 0 || intelResults.length > 0;
   const searched = clientResults !== null;
 
   return (
@@ -93,6 +103,26 @@ export default function SearchPage() {
                 className="flex items-center gap-3 bg-surface border border-border rounded-lg px-5 py-3.5 card-shadow card-shadow-hover transition">
                 <User size={15} className="text-teal flex-shrink-0" />
                 <p className="text-sm text-ink font-medium">{c.full_name}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {intelResults.length > 0 && (
+        <section className="mb-8">
+          <p className="font-mono text-xs text-ink-muted uppercase tracking-widest mb-3">Relationship intelligence</p>
+          <div className="space-y-2">
+            {intelResults.map((r: any) => (
+              <Link key={r.id} href={`/dashboard/clients/${r.client_id}`}
+                className="block bg-surface border border-border rounded-lg px-5 py-3.5 card-shadow card-shadow-hover transition">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-mono text-[10px] text-teal uppercase tracking-widest">{r.object_type}</span>
+                  <span className="font-mono text-[10px] text-ink-muted">{r.temporal_status}</span>
+                  <span className="text-xs text-ink-muted ml-auto">{r.clients?.full_name}</span>
+                </div>
+                <p className="text-sm text-ink font-medium">{r.label}</p>
+                <p className="text-xs text-ink-muted">{r.value}</p>
               </Link>
             ))}
           </div>
