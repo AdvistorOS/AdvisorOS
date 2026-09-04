@@ -9,20 +9,42 @@ import {
   Settings, User, ChevronUp, LogOut, Menu, X,
 } from "lucide-react";
 
-const NAV = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
-  { label: "Today", href: "/dashboard/today", icon: Sun },
-  { label: "Search", href: "/dashboard/search", icon: Search },
-  { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
-  { label: "Meetings", href: "/dashboard/meetings", icon: Calendar },
-  { label: "New Meeting", href: "/dashboard/record", icon: Mic },
-  { label: "Clients", href: "/dashboard/clients", icon: Users },
-  { label: "People", href: "/dashboard/people", icon: Contact },
-  { label: "Tasks", href: "/dashboard/tasks", icon: CheckSquare },
-  { label: "Coaching", href: "/dashboard/coaching", icon: GraduationCap },
-  { label: "Overall Stats", href: "/dashboard/analytics", icon: LineChart },
-  { label: "Team", href: "/dashboard/team", icon: UsersRound },
+const NAV_GROUPS = [
+  {
+    label: null,
+    items: [
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
+      { label: "Today", href: "/dashboard/today", icon: Sun },
+      { label: "Search", href: "/dashboard/search", icon: Search },
+    ],
+  },
+  {
+    label: "Work",
+    items: [
+      { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
+      { label: "Meetings", href: "/dashboard/meetings", icon: Calendar },
+      { label: "New Meeting", href: "/dashboard/record", icon: Mic },
+      { label: "Tasks", href: "/dashboard/tasks", icon: CheckSquare },
+    ],
+  },
+  {
+    label: "Relationships",
+    items: [
+      { label: "Clients", href: "/dashboard/clients", icon: Users },
+      { label: "People", href: "/dashboard/people", icon: Contact },
+    ],
+  },
+  {
+    label: "Performance",
+    items: [
+      { label: "Coaching", href: "/dashboard/coaching", icon: GraduationCap },
+      { label: "Overall Stats", href: "/dashboard/analytics", icon: LineChart },
+      { label: "Team", href: "/dashboard/team", icon: UsersRound },
+    ],
+  },
 ];
+
+const NAV = NAV_GROUPS.flatMap((g) => g.items);
 
 export function Sidebar({ email, brandColor, brandAccent, logoUrl }: {
   email: string;
@@ -122,13 +144,13 @@ export function Sidebar({ email, brandColor, brandAccent, logoUrl }: {
         <Menu size={18} className="text-ink" />
       </button>
 
-      <aside className="hidden md:flex flex-col w-60 border-r border-border h-screen sticky top-0">
+      <aside className="hidden md:flex flex-col w-64 border-r border-border h-screen sticky top-0">
         {content}
       </aside>
 
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-40 bg-black/30" onClick={() => setMobileOpen(false)}>
-          <aside className="w-60 h-full" onClick={(e) => e.stopPropagation()}>
+          <aside className="w-64 h-full" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-3 p-2 z-10">
               <X size={18} style={{ color: text }} />
             </button>
