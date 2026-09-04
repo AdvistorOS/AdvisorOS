@@ -16,6 +16,7 @@ import { CustomAnalysis } from "./CustomAnalysis";
 import { MomentAnalysis } from "./MomentAnalysis";
 import { CrmUpdate } from "./CrmUpdate";
 import { Scorecard } from "./Scorecard";
+import { MeetingPrep } from "./MeetingPrep";
 import { MeetingIntelligence } from "./MeetingIntelligence";
 import { RebuildIntelligence } from "./RebuildIntelligence";
 
@@ -186,6 +187,8 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
           )}
         </section>
       )}
+
+      {!isDone && !isFailed && !isProcessing && <MeetingPrep meetingId={id} />}
 
       {isDone && (
         <Link href={`/dashboard/meetings/${id}/review`}
