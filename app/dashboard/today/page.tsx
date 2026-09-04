@@ -22,7 +22,7 @@ export default function TodayPage() {
       if (!user) { setLoading(false); return; }
 
       const { data: clients } = await supabase
-        .from("clients").select("id, full_name, sales_stage, next_action, risk_note").eq("adviser_id", user.id);
+        .from("clients").select("id, full_name, next_action, risk_note").eq("adviser_id", user.id);
 
       const { data: meetings } = await supabase
         .from("meetings").select("id, client_id, created_at, status, clients(full_name)")
@@ -35,7 +35,6 @@ export default function TodayPage() {
 
       const cutoff = Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000;
       const staleClients = (clients ?? []).filter((c) => {
-        if (["Closed Won", "Closed Lost"].includes(c.sales_stage ?? "")) return false;
         const last = lastSeen[c.id];
         if (!last) return true;
         return new Date(last).getTime() < cutoff;
@@ -140,7 +139,6 @@ export default function TodayPage() {
                 <div className="flex items-center gap-2">
                   <AlertTriangle size={12} className="text-warn flex-shrink-0" />
                   <p className="text-sm text-ink font-medium">{c.full_name}</p>
-                  {c.sales_stage && <span className="font-mono text-[10px] text-ink-muted ml-auto">{c.sales_stage}</span>}
                 </div>
                 <p className="text-xs text-ink-muted mt-1">{c.risk_note}</p>
               </Link>
