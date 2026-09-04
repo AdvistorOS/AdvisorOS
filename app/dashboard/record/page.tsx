@@ -6,7 +6,7 @@ import { ArrowLeft, Mic, Square, UploadCloud, FileAudio, Loader2, RotateCw, Plus
 import Link from "next/link";
 import { withRetry } from "@/lib/retry";
 
-type Attendee = { name: string; email: string; phone: string };
+type Attendee = { name: string; email: string; phone: string; title: string; participantType: string };
 type RecordMode = "mic" | "system";
 
 export default function RecordPage() {
@@ -17,6 +17,9 @@ export default function RecordPage() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [attendeeName, setAttendeeName] = useState("");
+  const [attendeeTitle, setAttendeeTitle] = useState("");
+  const [attendeeType, setAttendeeType] = useState("client");
+  const [clientMatch, setClientMatch] = useState<any>(null);
   const [attendeeEmail, setAttendeeEmail] = useState("");
   const [attendeePhone, setAttendeePhone] = useState("");
   const [recording, setRecording] = useState(false);
@@ -63,7 +66,9 @@ export default function RecordPage() {
 
   function addAttendee() {
     if (!attendeeName.trim()) return;
-    setAttendees((prev) => [...prev, { name: attendeeName.trim(), email: attendeeEmail.trim(), phone: attendeePhone.trim() }]);
+    setAttendees((prev) => [...prev, { name: attendeeName.trim(), email: attendeeEmail.trim(), phone: attendeePhone.trim(), title: attendeeTitle.trim(), participantType: attendeeType }]);
+    setAttendeeTitle("");
+    setAttendeeType("client");
     setAttendeeName("");
     setAttendeeEmail("");
     setAttendeePhone("");
@@ -198,30 +203,56 @@ export default function RecordPage() {
 
   async function resolveClientAndAttendees(user: any) {
     let clientId = selectedClientId;
+
     if (!clientId) {
-      const { data: existing } = await supabase.from("clients").select("id")
-        .ilike("full_name", clientName.trim()).maybeSingle();
-      if (existing) {
-        clientId = existing.id;
+      const res = await fetch("/api/resolve-client", {
+        method: "POST",
+        body: JSON.stringify({ name: clientName.trim(), email: clientEmail.trim() || null }),
+      });
+      const data = await res.json();
+
+      if (data.match && data.match.strength === "strong") {
+        clientId = data.match.id;
       } else {
-        const { data: newClient, error: clientErr } = await supabase
-          .from("clients")
-          .insert({ full_name: clientName.trim(), email: clientEmail.trim() || null, adviser_id: user.id })
-          .select().single();
-        if (clientErr) throw new Error("Client insert error: " + clientErr.message);
-        clientId = newClient.id;
+        const created = await fetch("/api/create-client-resolved", {
+          method: "POST",
+          body: JSON.stringify({ name: clientName.trim(), email: clientEmail.trim() || null }),
+        });
+        const cd = await created.json();
+        if (!created.ok) throw new Error("Client create error: " + cd.error);
+        clientId = cd.client.id;
       }
     }
 
     const attendeeContactIds: string[] = [];
     for (const a of attendees) {
-      const { data: existingContact } = await supabase.from("contacts").select("id")
-        .eq("client_id", clientId).ilike("full_name", a.name).maybeSingle();
-      if (existingContact) {
-        attendeeContactIds.push(existingContact.id);
+      const normA = a.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const { data: existingContacts } = await supabase.from("contacts")
+        .select("id, full_name, normalised_name").eq("client_id", clientId);
+
+      const hit = (existingContacts ?? []).find(
+        (ec: any) => (ec.normalised_name ?? ec.full_name.toLowerCase().replace(/[^a-z0-9]/g, "")) === normA
+      );
+
+      if (hit) {
+        attendeeContactIds.push(hit.id);
+        if (a.title || a.participantType) {
+          await supabase.from("contacts").update({
+            title: a.title || undefined,
+            participant_type: a.participantType || undefined,
+          }).eq("id", hit.id);
+        }
       } else {
         const { data: newContact } = await supabase.from("contacts")
-          .insert({ client_id: clientId, full_name: a.name, email: a.email || null, phone: a.phone || null })
+          .insert({
+            client_id: clientId,
+            full_name: a.name.trim(),
+            email: a.email || null,
+            phone: a.phone || null,
+            title: a.title || null,
+            participant_type: a.participantType || "client",
+            normalised_name: normA,
+          })
           .select().single();
         if (newContact) attendeeContactIds.push(newContact.id);
       }
@@ -414,7 +445,7 @@ export default function RecordPage() {
             <div className="space-y-1.5 mb-2">
               {attendees.map((a, i) => (
                 <div key={i} className="flex items-center justify-between bg-paper border border-border rounded-md px-3 py-2 text-sm">
-                  <span className="text-ink">{a.name}{a.email ? ` — ${a.email}` : ""}</span>
+                  <span className="text-ink">{a.name}{a.title ? `, ${a.title}` : ""}{a.participantType !== "client" ? ` (${a.participantType})` : ""}</span>
                   <button type="button" onClick={() => removeAttendee(i)}><X size={13} className="text-ink-muted hover:text-warn" /></button>
                 </div>
               ))}
@@ -425,6 +456,17 @@ export default function RecordPage() {
               className="border border-border rounded-md px-3 py-2 text-sm bg-paper text-ink focus:outline-none focus:border-teal disabled:opacity-60" />
             <input placeholder="Email (optional)" value={attendeeEmail} onChange={(e) => setAttendeeEmail(e.target.value)} disabled={loading}
               className="border border-border rounded-md px-3 py-2 text-sm bg-paper text-ink focus:outline-none focus:border-teal disabled:opacity-60" />
+          </div>
+          <div className="grid grid-cols-2 gap-2 mb-1.5">
+            <input placeholder="Job title (optional)" value={attendeeTitle} onChange={(e) => setAttendeeTitle(e.target.value)} disabled={loading}
+              className="border border-border rounded-md px-3 py-2 text-sm bg-paper text-ink focus:outline-none focus:border-teal disabled:opacity-60" />
+            <select value={attendeeType} onChange={(e) => setAttendeeType(e.target.value)} disabled={loading}
+              className="border border-border rounded-md px-3 py-2 text-sm bg-paper text-ink focus:outline-none focus:border-teal disabled:opacity-60">
+              <option value="client">Client</option>
+              <option value="user">Me</option>
+              <option value="colleague">My colleague</option>
+              <option value="other">Other</option>
+            </select>
           </div>
           <div className="flex gap-2">
             <input placeholder="Phone (optional)" value={attendeePhone} onChange={(e) => setAttendeePhone(e.target.value)} disabled={loading}
