@@ -194,6 +194,13 @@ figures in GBP unless stated otherwise.`,
     }
     await supabaseAdmin.from("meetings").update({ status: "done", client_summary: summary }).eq("id", meetingId);
 
+    const intelUrl = process.env.NEXT_PUBLIC_APP_URL || "https://advisor-os-fawn.vercel.app";
+    fetch(`${intelUrl}/api/build-intelligence`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meetingId }),
+    }).catch(() => {});
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://advisor-os-fawn.vercel.app";
     fetch(`${appUrl}/api/flag-language`, {
       method: "POST",
