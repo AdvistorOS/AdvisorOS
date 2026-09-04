@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { Sun, AlertTriangle, Clock, CheckSquare, ArrowRight } from "lucide-react";
 import { LoadingDots } from "../LoadingDots";
+import { AttentionAlerts } from "./AttentionAlerts";
 
 const STALE_DAYS = 21;
 
@@ -84,6 +85,8 @@ export default function TodayPage() {
         <Sun size={20} className="text-brass" />
         <h1 className="font-display text-3xl text-ink">Today</h1>
       </div>
+
+      <AttentionAlerts />
 
       {nothingToDo && (
         <div className="border border-dashed border-border rounded-xl py-16 text-center">
