@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, User, Heart, Target, AlertCircle, ListChecks, Quote } from "lucide-react";
 import { ContactIntelligence } from "./ContactIntelligence";
 import { ContactEvolution } from "./ContactEvolution";
+import { VoiceEnroll } from "./VoiceEnroll";
 
 export default async function ContactProfilePage({ params }: { params: Promise<{ id: string; contactId: string }> }) {
   const { id, contactId } = await params;
@@ -32,6 +33,8 @@ export default async function ContactProfilePage({ params }: { params: Promise<{
       </div>
 
       <ContactEvolution contactId={contactId} />
+
+      <VoiceEnroll contactId={contactId} />
 
       <ContactIntelligence contactId={contactId} />
 

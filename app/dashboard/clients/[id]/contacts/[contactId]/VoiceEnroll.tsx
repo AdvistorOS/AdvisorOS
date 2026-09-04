@@ -1,34 +1,46 @@
 "use client";
-import { useState, useRef } from "react";
-import { Mic, Square, Loader2, Check } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Mic, Square, Loader2, Check, AlertCircle } from "lucide-react";
 import { fileToWav16kMono } from "@/lib/audio-wav";
 import { useToast } from "@/app/dashboard/ToastProvider";
 
 export function VoiceEnroll({ contactId }: { contactId: string }) {
+  const supabase = createClient();
   const toast = useToast();
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [processing, setProcessing] = useState(false);
-  const [status, setStatus] = useState<{ status: string; remaining: number } | null>(null);
+  const [enrolled, setEnrolled] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
   const [error, setError] = useState("");
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  useEffect(() => {
+    supabase.from("voice_profiles").select("enrolled").eq("contact_id", contactId)
+      .maybeSingle().then(({ data }) => { if (data?.enrolled) setEnrolled(true); });
+  }, [contactId]);
+
   async function start() {
     setError("");
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    streamRef.current = stream;
-    chunks.current = [];
-    const mr = new MediaRecorder(stream);
-    mr.ondataavailable = (e) => chunks.current.push(e.data);
-    mr.onstop = handleStopped;
-    mr.start();
-    mediaRecorder.current = mr;
-    setRecording(true);
-    setSeconds(0);
-    timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      chunks.current = [];
+      const mr = new MediaRecorder(stream);
+      mr.ondataavailable = (e) => chunks.current.push(e.data);
+      mr.onstop = handleStopped;
+      mr.start();
+      mediaRecorder.current = mr;
+      setRecording(true);
+      setSeconds(0);
+      timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+    } catch (e: any) {
+      setError("Couldn't access microphone: " + e.message);
+    }
   }
 
   function stop() {
@@ -40,64 +52,86 @@ export function VoiceEnroll({ contactId }: { contactId: string }) {
 
   async function handleStopped() {
     setProcessing(true);
+    setError("");
     try {
       const blob = new Blob(chunks.current, { type: "audio/webm" });
       const wav = await fileToWav16kMono(blob);
+
       const formData = new FormData();
       formData.append("contactId", contactId);
       formData.append("audio", wav, "sample.wav");
+
       const res = await fetch("/api/voice/enroll", { method: "POST", body: formData });
       const data = await res.json();
       setProcessing(false);
-      if (res.ok) {
-        setStatus({ status: data.status, remaining: data.remainingSpeechSeconds });
-        toast(data.status === "Enrolled" ? "Voice enrolled" : "Sample added — record a bit more");
-      } else {
+
+      if (!res.ok) {
         setError(data.error ?? "Enrollment failed");
+        return;
+      }
+
+      setRemaining(data.remainingSpeechSeconds);
+      if (data.status === "Enrolled") {
+        setEnrolled(true);
+        toast("Voice enrolled");
+      } else {
+        toast(`Sample added — ${data.remainingSpeechSeconds}s more speech needed`);
       }
     } catch (e: any) {
       setProcessing(false);
-      setError(e.message);
+      setError("Audio processing failed: " + e.message);
     }
   }
 
   return (
-    <section className="bg-surface border border-border rounded-xl p-6 card-shadow">
+    <section className="bg-surface border border-border rounded-lg p-5 card-shadow">
       <div className="flex items-center gap-2 mb-3">
         <Mic size={15} className="text-teal" />
-        <p className="font-mono text-xs text-teal uppercase tracking-widest">Voice recognition</p>
+        <h2 className="label">Voice recognition</h2>
       </div>
 
-      {status?.status === "Enrolled" ? (
+      {enrolled ? (
         <p className="text-sm text-good flex items-center gap-1.5">
-          <Check size={14} /> Voice enrolled — future meetings can auto-identify this person.
+          <Check size={14} /> Enrolled — Auto-identify can now match this person in future meetings.
         </p>
       ) : (
         <>
-          <p className="text-xs text-ink-muted mb-3">
-            Record ~20-30 seconds of this person speaking naturally. You may need 2-3 short samples.
+          <p className="text-sm text-ink-muted mb-3">
+            Record this person speaking naturally. Azure needs roughly 20 seconds of clean speech in
+            total — you may need two or three samples.
           </p>
           <div className="flex items-center gap-3">
-            {!recording && (
-              <button onClick={start} disabled={processing}
-                className="w-11 h-11 rounded-full bg-warn text-paper flex items-center justify-center hover:opacity-90 transition disabled:opacity-40">
+            {!recording && !processing && (
+              <button onClick={start}
+                className="w-10 h-10 rounded-full bg-warn text-paper flex items-center justify-center hover:opacity-90 transition">
                 <Mic size={16} />
               </button>
             )}
             {recording && (
-              <button onClick={stop} className="w-11 h-11 rounded-full bg-ink text-paper flex items-center justify-center animate-pulse">
-                <Square size={14} />
-              </button>
+              <>
+                <button onClick={stop}
+                  className="w-10 h-10 rounded-full bg-ink text-paper flex items-center justify-center animate-pulse">
+                  <Square size={14} />
+                </button>
+                <span className="font-mono text-sm text-warn">{seconds}s</span>
+              </>
             )}
-            {recording && <span className="font-mono text-sm text-warn">{seconds}s</span>}
             {processing && (
-              <span className="text-xs text-ink-muted flex items-center gap-1.5">
-                <Loader2 size={12} className="animate-spin" /> Processing…
+              <span className="text-sm text-ink-muted flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" /> Processing…
               </span>
             )}
           </div>
-          {status && <p className="text-xs text-brass mt-2">Sample added — {status.remaining}s more needed.</p>}
-          {error && <p className="text-xs text-warn mt-2">{error}</p>}
+
+          {remaining !== null && remaining > 0 && (
+            <p className="text-sm text-brass mt-2">{remaining}s more speech needed.</p>
+          )}
+
+          {error && (
+            <p className="text-sm text-warn mt-2 flex items-start gap-1.5">
+              <AlertCircle size={13} className="flex-shrink-0 mt-0.5" /> {error}
+            </p>
+          )}
         </>
       )}
     </section>
