@@ -3,7 +3,6 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
-
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
 export async function POST(req: Request) {
@@ -15,85 +14,81 @@ export async function POST(req: Request) {
   if (!clientId) return Response.json({ error: "clientId required" }, { status: 400 });
 
   const { data: client } = await supabaseAdmin
-    .from("clients").select("id, full_name, adviser_id").eq("id", clientId).single();
+    .from("clients").select("id, full_name, adviser_id, sales_stage").eq("id", clientId).single();
   if (!client || client.adviser_id !== user.id) return Response.json({ error: "not found" }, { status: 404 });
 
-  const { data: meetings } = await supabaseAdmin
-    .from("meetings").select("id, created_at, objective, client_summary")
-    .eq("client_id", clientId).eq("status", "done").order("created_at", { ascending: false }).limit(5);
-
-  if (!meetings?.length) {
-    return Response.json({ brief: "No completed meetings yet for this client — nothing to brief from." });
-  }
-
-  const { data: factsRows } = await supabaseAdmin
-    .from("extracted_facts").select("meeting_id, payload").in("meeting_id", meetings.map((m) => m.id));
-  const factsByMeeting: Record<string, any> = {};
-  for (const f of factsRows ?? []) factsByMeeting[f.meeting_id] = f.payload;
+  const { data: intel } = await supabaseAdmin
+    .from("intelligence_objects")
+    .select("object_type, label, value, temporal_status, confidence, evidence_quote, contacts(full_name), meetings(created_at)")
+    .eq("client_id", clientId)
+    .neq("temporal_status", "superseded")
+    .order("created_at", { ascending: false })
+    .limit(40);
 
   const { data: openActions } = await supabaseAdmin
     .from("actions").select("description, owner").eq("client_id", clientId).eq("status", "open");
 
-  const { data: clientFacts } = await supabaseAdmin
-    .from("client_facts").select("category, data").eq("client_id", clientId).is("superseded_by", null);
+  const { data: meetings } = await supabaseAdmin
+    .from("meetings").select("created_at, objective, client_summary")
+    .eq("client_id", clientId).eq("status", "done")
+    .order("created_at", { ascending: false }).limit(3);
 
-  const { data: contacts } = await supabaseAdmin
-    .from("contacts").select("id, full_name").eq("client_id", clientId);
-  const { data: profiles } = await supabaseAdmin
-    .from("contact_profiles").select("contact_id, data")
-    .in("contact_id", (contacts ?? []).map((c) => c.id)).is("superseded_by", null);
-  const profileByContact: Record<string, any> = {};
-  for (const p of profiles ?? []) profileByContact[p.contact_id] = p.data;
+  if (!meetings?.length) {
+    return Response.json({ brief: "No completed meetings yet for this client." });
+  }
 
-  const historyText = meetings.map((m: any, i: number) => {
-    const f = factsByMeeting[m.id] ?? {};
-    const obj = m.objective ? `Objective: ${m.objective} — ${f.objective_assessment?.achieved ?? "not assessed"}` : "";
-    const sentiment = f.client_sentiment?.overall_satisfaction ? `Sentiment: ${f.client_sentiment.overall_satisfaction}` : "";
-    const attention = (f.attention_items ?? []).map((a: any) => a.title).join(", ");
-    return `Meeting ${i + 1} (${new Date(m.created_at).toLocaleDateString()}):\n${obj}\n${sentiment}\nSummary: ${m.client_summary ?? "N/A"}\nOutstanding: ${attention || "none flagged"}`;
-  }).join("\n\n");
+  const intelText = (intel ?? []).length
+    ? (intel ?? []).map((i: any) =>
+        `[${i.temporal_status.toUpperCase()}] ${i.object_type} — ${i.label}: ${i.value}` +
+        (i.contacts?.full_name ? ` (${i.contacts.full_name})` : "") +
+        (i.meetings?.created_at ? ` — ${new Date(i.meetings.created_at).toLocaleDateString()}` : "")
+      ).join("\n")
+    : "No structured intelligence yet.";
 
-  const contactsText = (contacts ?? []).map((c: any) => {
-    const p = profileByContact[c.id];
-    if (!p) return `${c.full_name}: no profile yet`;
-    return `${c.full_name} — tone: ${p.emotional_tone ?? "n/a"}; motives: ${(p.motives ?? []).join(", ") || "none noted"}; concerns: ${(p.concerns ?? []).join(", ") || "none noted"}`;
-  }).join("\n") || "No individual contacts on record.";
-
-  const actionsText = (openActions ?? []).map((a: any) => `- ${a.description} (${a.owner})`).join("\n") || "No open actions.";
-  const factsText = (clientFacts ?? []).map((f: any) => `${f.data.label}: ${f.data.value}`).join("\n") || "No confirmed facts.";
+  const actionsText = (openActions ?? []).map((a: any) => `- ${a.description} (${a.owner})`).join("\n") || "None open.";
+  const recentText = meetings.map((m: any) =>
+    `${new Date(m.created_at).toLocaleDateString()}${m.objective ? ` — objective: ${m.objective}` : ""}\n${m.client_summary ?? ""}`
+  ).join("\n\n");
 
   try {
-    const response = await anthropic.messages.create({
+    const res = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 900,
-      system: `You are preparing a briefing for ${client.full_name} before the next meeting.
-Write it so someone can read it in 30 seconds and walk in prepared. Use these sections with
-clear headers:
+      system: `Brief the adviser before their next meeting with ${client.full_name}. They should be
+able to read this in 30 seconds and walk in prepared.
 
-WHERE WE ARE — two sentences on the current state of the relationship
-OPEN ITEMS — what's outstanding, who owes what
-WATCH FOR — concerns, objections, or sensitivities likely to come up
-SUGGESTED FOCUS — what this next meeting should aim to achieve, and why
+Use these headers:
 
-Be specific and grounded in the history below. Do not invent anything. If something isn't
-evidenced, leave it out rather than speculating.
+WHERE WE ARE
+- Two short bullets on the current state of the relationship
 
-CONFIRMED FACTS:
-${factsText}
+WHAT'S CHANGED SINCE LAST TIME
+- Bullets for anything marked CHANGED, CONTRADICTED or ESCALATING below. If nothing changed, write "Nothing significant."
+
+STILL OPEN
+- Unresolved questions, commitments outstanding, anything marked UNRESOLVED
+
+WATCH FOR
+- Concerns or objections likely to resurface, naming who raised them
+
+FOCUS THIS MEETING
+- One bullet: what this meeting should achieve and why
+
+Short punchy bullets, max 20 words each. Name real people. Never invent — if the record doesn't
+support something, leave it out.
+
+STRUCTURED INTELLIGENCE (status-tagged, most recent first):
+${intelText}
 
 OPEN ACTIONS:
 ${actionsText}
 
-PEOPLE:
-${contactsText}
-
-RECENT MEETINGS (most recent first):
-${historyText}`,
+RECENT MEETINGS:
+${recentText}`,
       messages: [{ role: "user", content: "Write the briefing." }],
     });
 
-    const brief = response.content.find((b) => b.type === "text")?.text ?? "No brief generated.";
-    return Response.json({ brief });
+    return Response.json({ brief: res.content.find((b) => b.type === "text")?.text ?? "" });
   } catch (e: any) {
     return Response.json({ error: e.message ?? String(e) }, { status: 500 });
   }
