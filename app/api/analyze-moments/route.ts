@@ -41,6 +41,25 @@ export async function POST(req: Request) {
     ? utterances.map((u: any) => `[${formatTime(u.start)}] Speaker ${u.speaker}: ${u.text}`).join("\n")
     : transcriptText;
 
+  const { data: mAttendees } = await supabaseAdmin
+    .from("meeting_attendees")
+    .select("speaker_label, contacts(full_name, participant_type)")
+    .eq("meeting_id", meetingId);
+
+  const userSpeakers = (mAttendees ?? [])
+    .filter((a: any) => a.contacts?.participant_type === "user")
+    .map((a: any) => a.speaker_label)
+    .filter(Boolean);
+
+  const speakerRoles = (mAttendees ?? [])
+    .filter((a: any) => a.speaker_label)
+    .map((a: any) => `Speaker ${a.speaker_label} = ${a.contacts?.full_name} (${a.contacts?.participant_type ?? "client"})`)
+    .join("\n");
+
+  const identityLine = userSpeakers.length
+    ? `The salesperson being coached is Speaker ${userSpeakers.join(" and ")}. Judge ONLY their contributions.\n\nSpeaker roles:\n${speakerRoles}`
+    : "Speakers are not yet identified. Infer which speaker is the salesperson from context — they are the one asking discovery questions and presenting solutions.";
+
   const objectiveLine = meeting.objective?.trim()
     ? `The objective of this meeting was: "${meeting.objective.trim()}"`
     : "No specific objective was set for this meeting.";
@@ -49,7 +68,7 @@ export async function POST(req: Request) {
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 2048,
-      system: `You are a sales coach reviewing a meeting transcript. ${objectiveLine}
+      system: `You are a sales coach reviewing a meeting transcript. ${objectiveLine}\n\n${identityLine}
 
 Identify the genuinely pivotal moments — the specific things the adviser said (or failed to say)
 that changed the direction of the conversation, for better or worse.

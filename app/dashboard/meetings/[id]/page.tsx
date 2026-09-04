@@ -16,6 +16,8 @@ import { CustomAnalysis } from "./CustomAnalysis";
 import { MomentAnalysis } from "./MomentAnalysis";
 import { CrmUpdate } from "./CrmUpdate";
 import { Scorecard } from "./Scorecard";
+import { MeetingIntelligence } from "./MeetingIntelligence";
+import { RebuildIntelligence } from "./RebuildIntelligence";
 
 export default async function MeetingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -95,6 +97,8 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
 
   const analysisTab = (
     <>
+      {isDone && <RebuildIntelligence meetingId={id} />}
+      {isDone && <MeetingIntelligence meetingId={id} />}
       {facts?.payload?.stage_timeline && <StageTimeline stages={facts.payload.stage_timeline} />}
       {isDone && <MomentAnalysis meetingId={id} />}
       {isDone && <CrmUpdate meetingId={id} />}

@@ -37,6 +37,24 @@ export async function POST(req: Request) {
 
   const factsText = (facts ?? []).map((f: any) => `${f.data.label}: ${f.data.value}`).join("\n") || "No confirmed facts on record.";
 
+  const { data: intel } = await supabaseAdmin
+    .from("intelligence_objects")
+    .select("object_type, label, value, temporal_status, evidence_quote, contacts(full_name), meetings(created_at)")
+    .eq("client_id", clientId)
+    .neq("temporal_status", "superseded")
+    .neq("validation_status", "rejected")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  const intelText = (intel ?? []).length
+    ? (intel ?? []).map((i: any) =>
+        `[${i.temporal_status}] ${i.object_type} — ${i.label}: ${i.value}` +
+        (i.contacts?.full_name ? ` (said by ${i.contacts.full_name})` : "") +
+        (i.meetings?.created_at ? ` on ${new Date(i.meetings.created_at).toLocaleDateString()}` : "") +
+        (i.evidence_quote ? ` — "${i.evidence_quote}"` : "")
+      ).join("\n")
+    : "No structured intelligence recorded yet.";
+
   if (!meetings?.length) {
     return Response.json({ answer: "No meetings recorded yet for this client, so there's nothing to draw on." });
   }
@@ -49,6 +67,10 @@ export async function POST(req: Request) {
 entirely on their meeting history. Confirmed facts on record:
 
 ${factsText}
+
+Tracked relationship intelligence (status-tagged, most recent first):
+
+${intelText}
 
 Full meeting history:
 
