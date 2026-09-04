@@ -5,19 +5,19 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getContrastText, getContrastMuted } from "@/lib/color-contrast";
 import {
-  LayoutDashboard, Calendar, CalendarDays, Sun, PoundSterling, Mic, Users, CheckSquare, Search, GraduationCap, LineChart, UsersRound,
+  LayoutDashboard, Calendar, CalendarDays, Sun, PoundSterling, Mic, Users, Contact, CheckSquare, Search, GraduationCap, LineChart, UsersRound,
   Settings, User, ChevronUp, LogOut, Menu, X,
 } from "lucide-react";
 
 const NAV = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
   { label: "Today", href: "/dashboard/today", icon: Sun },
-  { label: "Pipeline", href: "/dashboard/pipeline", icon: PoundSterling },
   { label: "Search", href: "/dashboard/search", icon: Search },
   { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
   { label: "Meetings", href: "/dashboard/meetings", icon: Calendar },
   { label: "New Meeting", href: "/dashboard/record", icon: Mic },
   { label: "Clients", href: "/dashboard/clients", icon: Users },
+  { label: "People", href: "/dashboard/people", icon: Contact },
   { label: "Tasks", href: "/dashboard/tasks", icon: CheckSquare },
   { label: "Coaching", href: "/dashboard/coaching", icon: GraduationCap },
   { label: "Overall Stats", href: "/dashboard/analytics", icon: LineChart },
