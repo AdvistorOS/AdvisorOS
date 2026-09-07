@@ -74,7 +74,7 @@ export async function POST(req: Request) {
 
   const extractionPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 4096,
+    max_tokens: 2560,
     system: `You are assisting ${domainContext}. Known about this client already:
 
 ${knownFactsText}
@@ -109,16 +109,16 @@ information as raw JSON matching this exact shape, nothing else, no markdown fen
     "what_hindered": "Short phrase or empty string"
   },
   "scorecard": {
-    "discovery": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
-    "question_quality": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
-    "listening": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
-    "objection_handling": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
-    "commercial_positioning": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
-    "client_engagement": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
-    "next_step_clarity": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
-    "talk_ratio": { "score": 0, "reason": "Who dominated the conversation and whether that served the meeting", "improve": "One concrete thing to do differently" },
-    "rapport": { "score": 0, "reason": "Cite specific evidence", "improve": "One concrete thing to do differently" },
-    "overall": { "score": 0, "reason": "The holistic judgment behind this number", "improve": "The single highest-impact change" }
+    "discovery": { "score": 0, "reason": "One short sentence citing evidence" },
+    "question_quality": { "score": 0, "reason": "One short sentence citing evidence" },
+    "listening": { "score": 0, "reason": "One short sentence citing evidence" },
+    "objection_handling": { "score": 0, "reason": "One short sentence citing evidence" },
+    "commercial_positioning": { "score": 0, "reason": "One short sentence citing evidence" },
+    "client_engagement": { "score": 0, "reason": "One short sentence citing evidence" },
+    "next_step_clarity": { "score": 0, "reason": "One short sentence citing evidence" },
+    "talk_ratio": { "score": 0, "reason": "Who dominated the conversation and whether that served the meeting" },
+    "rapport": { "score": 0, "reason": "One short sentence citing evidence" },
+    "overall": { "score": 0, "reason": "The holistic judgment behind this number" }
   },
   "stage_timeline": [
     { "time": "mm:ss", "stage": "Introduction | Discovery | Problem Recognition | Commercial | Objection | Resolution | Buying Signal | Next Step", "note": "Short phrase" }
@@ -134,9 +134,9 @@ actively advanced the outcome. 10 = exceptional, reserve for genuinely rare exec
 competent meetings should land 6-7 — do not inflate. Every "reason" cites something specific
 from the transcript. Every "improve" is concrete and actionable, never generic advice. Every scorecard
 "reason" must cite something SPECIFIC from the transcript — not a generic statement. Use REAL
-timestamps from the transcript for both timelines. stage_timeline: max 8 entries. sentiment
-timeline: max 5 entries per speaker. STRICT LIMITS elsewhere: max 10 fields, max 5
-attention_items, max 3 life_events, max 5 action_items. All monetary figures in GBP unless
+timestamps from the transcript for both timelines. stage_timeline: max 5 entries. sentiment
+timeline: max 3 entries per speaker. STRICT LIMITS elsewhere: max 6 fields, max 5
+attention_items, max 3 life_events, max 4 action_items. All monetary figures in GBP unless
 stated otherwise. Do not invent information. Output ONLY the raw JSON object, complete and
 valid, nothing else.`,
     messages: [{ role: "user", content: timestampedTranscript }],
@@ -144,7 +144,7 @@ valid, nothing else.`,
 
   const summaryPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 900,
+    max_tokens: 500,
     system: `Write a thorough summary of this meeting for the client's own records. Use clear
 section headers and real substance under each — this should be genuinely useful to read back,
 not a brief overview. Use these sections:
