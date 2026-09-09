@@ -74,7 +74,7 @@ export async function POST(req: Request) {
 
   const extractionPromise = anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 2560,
+    max_tokens: 4096,
     system: `You are assisting ${domainContext}. Known about this client already:
 
 ${knownFactsText}
@@ -119,12 +119,6 @@ information as raw JSON matching this exact shape, nothing else, no markdown fen
     "talk_ratio": { "score": 0, "reason": "Who dominated the conversation and whether that served the meeting" },
     "rapport": { "score": 0, "reason": "One short sentence citing evidence" },
     "overall": { "score": 0, "reason": "The holistic judgment behind this number" }
-  },
-  "stage_timeline": [
-    { "time": "mm:ss", "stage": "Introduction | Discovery | Problem Recognition | Commercial | Objection | Resolution | Buying Signal | Next Step", "note": "Short phrase" }
-  ],
-  "speaker_sentiment_timeline": {
-    "A": [ { "time": "mm:ss", "sentiment": "one or two words", "note": "Short phrase" } ]
   }
 }
 
@@ -135,7 +129,7 @@ competent meetings should land 6-7 — do not inflate. Every "reason" cites some
 from the transcript. Every "improve" is concrete and actionable, never generic advice. Every scorecard
 "reason" must cite something SPECIFIC from the transcript — not a generic statement. Use REAL
 timestamps from the transcript for both timelines. stage_timeline: max 5 entries. sentiment
-timeline: max 3 entries per speaker. STRICT LIMITS elsewhere: max 6 fields, max 5
+STRICT LIMITS elsewhere: max 6 fields, max 5
 attention_items, max 3 life_events, max 4 action_items. All monetary figures in GBP unless
 stated otherwise. Do not invent information. Output ONLY the raw JSON object, complete and
 valid, nothing else.`,
