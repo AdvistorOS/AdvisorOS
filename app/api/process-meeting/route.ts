@@ -4,6 +4,7 @@ import { ownedMeeting } from "@/lib/processing/access";
 import { begin, check, fail } from "@/lib/processing/state";
 import { webhookUrl } from "@/lib/processing/webhook";
 import { runAnalysis } from "@/lib/processing/extract";
+import { missingRecordingSettings } from "@/lib/processing/config";
 
 export const maxDuration = 300;
 class ProcessingStartError extends Error {
@@ -25,12 +26,7 @@ export async function POST(req: Request) {
     if (!hasTranscript && !meeting.media_url) return Response.json({ error: "No recording or transcript found. Please upload one." }, { status: 400 });
     if (!hasTranscript) {
       stage = "configuration";
-      const missing: string[] = [];
-      if (!process.env.ASSEMBLYAI_API_KEY?.trim()) missing.push("ASSEMBLYAI_API_KEY");
-      if ((process.env.ASSEMBLYAI_WEBHOOK_SECRET?.length ?? 0) < 32) missing.push("ASSEMBLYAI_WEBHOOK_SECRET (at least 32 characters)");
-      let validOrigin = false;
-      try { validOrigin = new URL(process.env.NEXT_PUBLIC_APP_URL ?? "").protocol === "https:"; } catch {}
-      if (!validOrigin) missing.push("NEXT_PUBLIC_APP_URL (HTTPS website address)");
+      const missing = missingRecordingSettings();
       if (missing.length) throw new ProcessingStartError("PROCESSING_CONFIGURATION", `Recording processing needs Vercel configuration: ${missing.join(", ")}. Save these settings and redeploy, then retry this meeting.`);
     }
     stage = "claim_attempt";
