@@ -1,10 +1,14 @@
+import { ownedClient } from "@/lib/processing/access";
 import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
 export async function POST(req: Request) {
-  const { clientId } = await req.json();
+  const body = await req.json().catch(() => null);
+  const access = await ownedClient(body?.clientId);
+  if (access.error) return access.error;
+  const clientId = access.client.id;
 
   const { data: client } = await supabaseAdmin.from("clients").select("full_name").eq("id", clientId).single();
   const { data: facts } = await supabaseAdmin.from("client_facts").select("data, created_at").eq("client_id", clientId).is("superseded_by", null);

@@ -1,7 +1,11 @@
+import { ownedClient } from "@/lib/processing/access";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(req: Request) {
-  const { clientId } = await req.json();
+  const body = await req.json().catch(() => null);
+  const access = await ownedClient(body?.clientId);
+  if (access.error) return access.error;
+  const clientId = access.client.id;
 
   const { data: meetings } = await supabaseAdmin.from("meetings").select("id").eq("client_id", clientId);
   const meetingIds = (meetings ?? []).map((m) => m.id);

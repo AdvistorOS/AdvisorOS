@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function Page({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
   return (
-    <main className={`mx-auto px-6 lg:px-10 py-8 ${wide ? "max-w-[1400px]" : "max-w-5xl"}`}>
+    <main className={`mx-auto px-5 sm:px-8 lg:px-10 py-8 lg:py-10 ${wide ? "max-w-[1400px]" : "max-w-5xl"}`}>
       {children}
     </main>
   );
@@ -12,13 +12,13 @@ export function PageHeader({ title, subtitle, meta, actions }: {
   title: string; subtitle?: string; meta?: React.ReactNode; actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-6 pb-6 mb-6 border-b border-border">
+    <div className="flex flex-col sm:flex-row items-start justify-between gap-4 pb-6 mb-6 border-b border-border">
       <div className="min-w-0">
-        <h1 className="font-display text-[28px] leading-tight text-ink">{title}</h1>
+        <h1 className="font-display text-[30px] leading-tight text-ink">{title}</h1>
         {subtitle && <p className="text-sm text-ink-muted mt-1">{subtitle}</p>}
         {meta && <div className="flex items-center gap-4 mt-2.5 text-xs text-ink-subtle">{meta}</div>}
       </div>
-      {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2 flex-shrink-0">{actions}</div>}
     </div>
   );
 }
@@ -43,7 +43,7 @@ export function Card({ children, className = "", hover = false }: {
   children: React.ReactNode; className?: string; hover?: boolean;
 }) {
   return (
-    <div className={`bg-surface border border-border rounded-lg card-shadow ${hover ? "card-shadow-hover" : ""} ${className}`}>
+    <div className={`bg-surface border border-border rounded-xl card-shadow ${hover ? "card-shadow-hover" : ""} ${className}`}>
       {children}
     </div>
   );
@@ -56,7 +56,7 @@ export function Stat({ label, value, sub, tone = "default" }: {
     default: "text-ink", good: "text-good", warn: "text-warn", brass: "text-brass",
   }[tone];
   return (
-    <div className="bg-surface border border-border rounded-lg px-4 py-3 card-shadow">
+    <div className="bg-surface border border-border rounded-xl px-4 py-3 card-shadow">
       <p className="text-xs text-ink-subtle">{label}</p>
       <p className={`font-display text-2xl leading-tight mt-0.5 ${toneCls}`}>{value}</p>
       {sub && <p className="text-[11px] text-ink-subtle mt-0.5">{sub}</p>}
@@ -91,7 +91,7 @@ export function EmptyState({ icon: Icon, title, description, actionLabel, action
   icon: any; title: string; description: string; actionLabel?: string; actionHref?: string;
 }) {
   return (
-    <div className="border border-dashed border-border rounded-lg py-14 px-6 text-center">
+    <div className="border border-dashed border-border rounded-xl py-14 px-6 text-center">
       <Icon size={22} className="text-ink-subtle mx-auto mb-3" />
       <p className="text-ink font-medium text-sm">{title}</p>
       <p className="text-sm text-ink-muted mt-1 max-w-sm mx-auto">{description}</p>

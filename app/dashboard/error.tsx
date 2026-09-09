@@ -9,7 +9,7 @@ export default function DashboardError({ reset }: { error: Error; reset: () => v
           <AlertTriangle size={20} className="text-warn" />
         </div>
         <p className="font-display text-xl text-ink mb-1">Something went wrong</p>
-        <p className="text-sm text-ink-muted mb-6">This is on us, not you — try again in a moment.</p>
+        <p className="text-sm text-ink-muted mb-6">We couldn’t load this page. Please try again.</p>
         <button onClick={reset}
           className="bg-teal text-paper text-sm font-medium rounded-md px-4 py-2.5 hover:opacity-90 transition">
           Try again

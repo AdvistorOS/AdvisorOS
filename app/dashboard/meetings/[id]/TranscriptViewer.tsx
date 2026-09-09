@@ -17,15 +17,20 @@ export function TranscriptViewer({ meetingId, attendeeNames, attendeeContactIds,
 }) {
   const supabase = createClient();
   const [utterances, setUtterances] = useState<any[]>([]);
+  const [fullText, setFullText] = useState("");
+  const [loadError, setLoadError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    supabase.from("transcripts").select("utterances").eq("meeting_id", meetingId)
+    supabase.from("transcripts").select("utterances, full_text").eq("meeting_id", meetingId)
       .order("id", { ascending: false }).limit(1).maybeSingle()
-      .then(({ data }) => setUtterances((data?.utterances as any[]) ?? []));
+      .then(({ data, error }) => { setUtterances((data?.utterances as any[]) ?? []); setFullText(data?.full_text ?? ""); setLoadError(!!error); setLoaded(true); });
   }, [meetingId]);
 
-  if (!utterances.length) return null;
+  if (!loaded) return <p role="status" className="text-sm text-ink-muted">Loading transcript…</p>;
+  if (loadError) return <p role="alert" className="text-sm text-warn">The transcript could not load. Reopen this tab to try again.</p>;
+  if (!utterances.length) return <section className="bg-surface border border-border rounded-xl p-6 card-shadow"><h2 className="text-sm font-semibold mb-4">Full transcript</h2><p className="whitespace-pre-wrap text-sm leading-relaxed">{fullText || "No transcript is available for this meeting."}</p></section>;
 
   const visible = expanded ? utterances : utterances.slice(0, 6);
 

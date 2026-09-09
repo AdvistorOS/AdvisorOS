@@ -1,6 +1,6 @@
 # AdvisorOS — review build
 
-This update is based on the uploaded AdvisorOS-main.zip, identified by archive commit aaa2ef15d68cb03260d4c2c1ef9546da589801d1. It has not been pushed to GitHub or deployed to Vercel. Apply it to a separate branch and use a staging Supabase project first. The upload did not include your database schema, row-level security policies, or deployment credentials.
+This update is based on the uploaded AdvisorOS-main.zip, identified by archive commit aaa2ef15d68cb03260d4c2c1ef9546da589801d1. This document describes the review branch. Production deployment and hosted database migrations have not been verified. Apply it to a separate branch and use a staging Supabase project first. The upload did not include your database schema, row-level security policies, or deployment credentials.
 
 ## What changed
 
@@ -74,3 +74,22 @@ For rollback, prefer restoring a known secure deployment and leave the additive 
 The meeting detail page now fetches independent result panels in parallel. A small authenticated status endpoint is polled every two seconds while work is pending; the full page refreshes only when a processing stage changes or an attempt becomes stale. Polling pauses while the tab is hidden and reports connection failures. Core results appear before optional enrichment finishes, and polling continues until those additional insights are ready or the attempt times out. Approved meetings retain their analysis panels. Uploaded document transcripts display full text even without speaker-labelled utterances. Mobile tabs sit below the navigation header and scroll horizontally.
 
 Apply the second migration as well as the first before deploying this version. This update improves the delay between saved results and their appearance in the UI; it does not establish a measured reduction in provider inference time. Real-recording latency and visual acceptance checks remain required.
+
+
+## Integration with GitHub main
+
+Compared against main at ff8cd1663212c5d285b2921961c2b06fbd1e4831. Preserves its removal of automatic stage/speaker timelines to reduce output size. Optional historical timelines remain supported. Restores the complete dependency lockfile together with the new test dependencies. The previously uploaded deployment notes alone did not install the app changes.
+
+## Hosted database verification — 9 September 2026
+
+The connected AdvisorOS project was inspected: UUID IDs, text statuses and JSONB payloads match the processing migrations. Both processing migrations have now been applied and their columns and service-role-only function permissions verified. No existing meeting or transcript content was rewritten by these migrations.
+
+Inspection also found row-level security disabled on `transcripts` and `super_admins`, with anonymous table privileges. Added and applied `202609090002_private_transcripts_and_admins.sql`: authenticated users can read transcripts for their own meetings; admin membership can only be read by the matching authenticated email; browser writes to these two tables are denied. Server service-role operations retain access. Local PostgreSQL tests cover anonymous denial, adviser isolation, prevention of self-assigned admin membership, admin self-checks and service-role access. Supabase's security advisor no longer reports either RLS error. Its leaked-password-protection warning remains; enable that in Auth settings where supported. This is not a full audit of every existing policy.
+
+When installing on another database, apply all three migrations in filename order after schema verification. On this connected project, use migration history to avoid reapplying the policy migration.
+
+Code is on `codex/advisoros-polish-processing`, pull request #1. Both linked Vercel projects initially reported failed preview deployments; build logs and runtime configuration remain to be checked. No production merge, provider key rotation, authenticated preview test or live latency benchmark has been completed.
+
+## Missing Resend key build fix
+
+The supplied Vercel log identified module-level Resend construction in `/api/admin/create-adviser` as the build failure. Resend is now instantiated only during an authenticated, authorised invitation request. Missing `RESEND_API_KEY` returns HTTP 503 before creating an account; provider-returned send errors are reported accurately. Add a valid Resend key to the relevant Vercel environment to enable invitations. This email configuration no longer blocks deployment of meeting features.

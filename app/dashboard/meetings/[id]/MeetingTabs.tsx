@@ -16,10 +16,10 @@ export function MeetingTabs({ overview, analysis, people, transcript }: {
 
   return (
     <>
-      <div className="flex gap-1 border-b border-border sticky top-0 bg-paper z-10 -mx-8 px-8 pt-1">
+      <div className="flex gap-1 border-b border-border sticky top-16 md:top-0 bg-paper z-10 overflow-x-auto pt-1">
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setActive(t.id)}
-            className={`px-4 py-2.5 text-sm transition border-b-2 -mb-px
+            className={`px-4 py-2.5 whitespace-nowrap text-sm transition border-b-2 -mb-px
               ${active === t.id ? "border-teal text-ink font-medium" : "border-transparent text-ink-muted hover:text-ink"}`}>
             {t.label}
           </button>

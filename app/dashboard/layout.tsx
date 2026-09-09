@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { Sidebar } from "./Sidebar";
@@ -7,6 +8,8 @@ import { OfflineBanner } from "./OfflineBanner";
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
 
   let brandColor = "#0B5C52";
   let brandAccent = "#C9971E";
@@ -30,7 +33,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <OfflineBanner />
         <div className="flex min-h-screen bg-paper">
           <Sidebar email={user?.email ?? ""} brandColor={brandColor} brandAccent={brandAccent} logoUrl={logoUrl} />
-          <div className="flex-1 min-w-0">{children}</div>
+          <div id="main-content" className="flex-1 min-w-0 pt-16 md:pt-0">{children}</div>
         </div>
       </ToastProvider>
     </div>
