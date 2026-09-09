@@ -79,3 +79,13 @@ Apply the second migration as well as the first before deploying this version. T
 ## Integration with GitHub main
 
 Compared against main at ff8cd1663212c5d285b2921961c2b06fbd1e4831. Preserves its removal of automatic stage/speaker timelines to reduce output size. Optional historical timelines remain supported. Restores the complete dependency lockfile together with the new test dependencies. The previously uploaded deployment notes alone did not install the app changes.
+
+## Hosted database verification — 9 September 2026
+
+The connected AdvisorOS project was inspected: UUID IDs, text statuses and JSONB payloads match the processing migrations. Both processing migrations have now been applied and their columns and service-role-only function permissions verified. No existing meeting or transcript content was rewritten by these migrations.
+
+Inspection also found row-level security disabled on `transcripts` and `super_admins`, with anonymous table privileges. Added and applied `202609090002_private_transcripts_and_admins.sql`: authenticated users can read transcripts for their own meetings; admin membership can only be read by the matching authenticated email; browser writes to these two tables are denied. Server service-role operations retain access. Local PostgreSQL tests cover anonymous denial, adviser isolation, prevention of self-assigned admin membership, admin self-checks and service-role access. Supabase's security advisor no longer reports either RLS error. Its leaked-password-protection warning remains; enable that in Auth settings where supported. This is not a full audit of every existing policy.
+
+When installing on another database, apply all three migrations in filename order after schema verification. On this connected project, use migration history to avoid reapplying the policy migration.
+
+Code is on `codex/advisoros-polish-processing`, pull request #1. Both linked Vercel projects initially reported failed preview deployments; build logs and runtime configuration remain to be checked. No production merge, provider key rotation, authenticated preview test or live latency benchmark has been completed.
