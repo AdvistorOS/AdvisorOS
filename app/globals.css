@@ -1,21 +1,24 @@
 @import "tailwindcss";
 
 @theme {
-  --color-paper: #F7F6F1;
+  --font-body: "Inter", "Segoe UI", Arial, sans-serif;
+  --font-display: "Inter", "Segoe UI", Arial, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, monospace;
+  --color-paper: #F6F8FA;
   --color-surface: #FFFFFF;
-  --color-ink: #16241F;
-  --color-ink-muted: #56675F;
-  --color-ink-subtle: #8A9691;
-  --color-brass: #C9971E;
-  --color-brass-soft: #FBF0D9;
-  --color-teal: #0B5C52;
-  --color-teal-soft: #E1F0EC;
-  --color-border: #E3E0D2;
-  --color-border-strong: #CFCBB8;
+  --color-ink: #182B35;
+  --color-ink-muted: #526572;
+  --color-ink-subtle: #647782;
+  --color-brass: #956616;
+  --color-brass-soft: #FCF3DF;
+  --color-teal: #087F73;
+  --color-teal-soft: #E8F5F2;
+  --color-border: #E1E8EC;
+  --color-border-strong: #BBCBD3;
   --color-good: #2E7D5E;
   --color-good-soft: #E4F3EC;
-  --color-warn: #B85630;
-  --color-warn-soft: #F7E7DE;
+  --color-warn: #A34C24;
+  --color-warn-soft: #FFF4EC;
 }
 
 html {
@@ -30,7 +33,7 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
-.font-display { font-family: var(--font-display); letter-spacing: -0.015em; }
+.font-display { font-family: var(--font-display); letter-spacing: -0.035em; font-weight: 600; }
 .font-mono { font-family: var(--font-mono); }
 
 /* Section labels — replaces the monospace micro-heading pattern */
@@ -50,8 +53,11 @@ body {
   border-color: var(--color-border-strong);
 }
 
-button, a { transition: all 0.15s ease; }
-button:active { transform: scale(0.98); }
+button, a { transition: color 0.15s, background-color 0.15s, border-color 0.15s, box-shadow 0.15s; }
+button:not(:disabled), summary { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--color-teal); outline-offset: 3px; }
+::selection { background: #c5eae1; }
+input, textarea, select { font: inherit; }
 
 /* Dense data rows */
 .row {
@@ -86,8 +92,12 @@ button:active { transform: scale(0.98); }
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #EFEDE4 0px, #F7F6F1 200px, #EFEDE4 400px);
+  background: linear-gradient(90deg, #EFEDE4 0px, #F6F8FA 200px, #EFEDE4 400px);
   background-size: 800px 100%;
   animation: shimmer 1.4s infinite linear;
   border-radius: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 }

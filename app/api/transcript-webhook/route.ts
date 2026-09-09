@@ -1,60 +1,48 @@
+import { after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { validSignature } from "@/lib/processing/webhook";
+import { check, fail, saveTranscript } from "@/lib/processing/state";
+import { runAnalysis } from "@/lib/processing/extract";
 
-export const maxDuration = 60;
-
+export const maxDuration = 300;
 export async function POST(req: Request) {
   const url = new URL(req.url);
-  const meetingId = url.searchParams.get("meetingId");
-  const secret = url.searchParams.get("secret");
-
-  if (!meetingId || secret !== process.env.ASSEMBLYAI_API_KEY) {
-    return Response.json({ error: "unauthorized" }, { status: 401 });
+  const id = url.searchParams.get("meetingId") ?? "";
+  const token = url.searchParams.get("token") ?? "";
+  if (!validSignature(id, token, url.searchParams.get("signature") ?? "")) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const body = await req.json();
-  const { transcript_id, status } = body;
-
-  if (status === "error") {
-    await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
-    return Response.json({ ok: true });
-  }
-  if (status !== "completed") {
-    return Response.json({ ok: true });
-  }
-
-  const { data: currentMeeting } = await supabaseAdmin
-    .from("meetings").select("status").eq("id", meetingId).single();
-  if (!currentMeeting || currentMeeting.status !== "transcribing") {
-    return Response.json({ ok: true, skipped: true });
-  }
-
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body.transcript_id !== "string") return Response.json({ error: "Invalid callback" }, { status: 400 });
   try {
-    const transcriptRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcript_id}`, {
-      headers: { authorization: process.env.ASSEMBLYAI_API_KEY! },
-    });
-    if (!transcriptRes.ok) {
-      await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
-      return Response.json({ step: "fetch transcript", error: await transcriptRes.text() }, { status: 500 });
+    const { data: meeting, error } = await supabaseAdmin.from("meetings").select("status, transcript_job_id")
+      .eq("id", id).eq("processing_token", token).maybeSingle();
+    check(error);
+    if (!meeting || !["transcribing", "extracting"].includes(meeting.status)) return Response.json({ ok: true, skipped: true });
+    // Ask the provider to retry if its callback arrived before the submission was saved.
+    if (!meeting.transcript_job_id) return Response.json({ error: "Submission pending" }, { status: 503 });
+    if (meeting.transcript_job_id !== body.transcript_id) return Response.json({ error: "Unmatched transcript" }, { status: 403 });
+    if (body.status === "error") {
+      await fail(id, token, "The recording could not be transcribed. Check that it contains audible speech, then retry.");
+      return Response.json({ ok: true });
     }
-    const transcriptData = await transcriptRes.json();
-    const transcriptText = transcriptData.text ?? "";
-
-    if (transcriptText.trim().length < 10) {
-      await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
-      return Response.json({ step: "empty transcript", error: "No speech detected." }, { status: 500 });
+    if (body.status !== "completed") return Response.json({ ok: true });
+    if (meeting.status === "transcribing") {
+      const res = await fetch(`https://api.assemblyai.com/v2/transcript/${encodeURIComponent(body.transcript_id)}`, {
+        signal: AbortSignal.timeout(20_000), headers: { authorization: process.env.ASSEMBLYAI_API_KEY! },
+      });
+      if (!res.ok) throw new Error("Transcript fetch failed");
+      const data = await res.json();
+      if (data.status !== "completed" || typeof data.text !== "string" || data.text.trim().length < 10) {
+        await fail(id, token, "No usable speech was detected. Please check the recording and retry.");
+        return Response.json({ ok: true });
+      }
+      if (!await saveTranscript(id, token, data.text, data.utterances ?? [])) return Response.json({ ok: true, skipped: true });
     }
-
-    // Always clear any existing transcript row for this meeting first — retries
-    // must never leave more than one row behind, or .single() lookups downstream break.
-    await supabaseAdmin.from("transcripts").delete().eq("meeting_id", meetingId);
-    await supabaseAdmin.from("transcripts").insert({
-      meeting_id: meetingId, full_text: transcriptText, utterances: transcriptData.utterances,
-    });
-    await supabaseAdmin.from("meetings").update({ status: "extracting" }).eq("id", meetingId);
-
+    after(() => runAnalysis(id, token));
     return Response.json({ ok: true });
-  } catch (e: any) {
-    await supabaseAdmin.from("meetings").update({ status: "failed" }).eq("id", meetingId);
-    return Response.json({ step: "transcript fetch/save", error: e.message ?? String(e) }, { status: 500 });
+  } catch {
+    // Keep the attempt live so a provider retry can recover a transient fetch/database error.
+    return Response.json({ error: "Unable to handle callback. Please retry." }, { status: 503 });
   }
 }

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, FileText, ShieldAlert, ClipboardCheck } from "lucide-react";
 import { DeleteButton } from "./DeleteButton";
@@ -26,10 +27,16 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
 
   const { data: meeting } = await supabase
     .from("meetings").select("*, clients(id, full_name, email)").eq("id", id).single();
-  const { data: facts } = await supabase
-    .from("extracted_facts").select("payload, reviewed").eq("meeting_id", id).single();
-  const { data: attendeeRows } = await supabase
-    .from("meeting_attendees").select("speaker_label, contact_id, contacts(full_name)").eq("meeting_id", id);
+  if (!meeting) notFound();
+  const [factsResult, attendeeResult, notesResult] = await Promise.all([
+    supabase.from("extracted_facts").select("payload, reviewed").eq("meeting_id", id).eq("category", "facts").maybeSingle(),
+    supabase.from("meeting_attendees").select("speaker_label, contact_id, contacts(full_name)").eq("meeting_id", id),
+    supabase.from("internal_notes").select("payload").eq("meeting_id", id).eq("type", "sentiment").maybeSingle(),
+  ]);
+  const facts = factsResult.data;
+  const attendeeRows = attendeeResult.data;
+  const notes = notesResult.data;
+  const resultsUnavailable = !!(factsResult.error || attendeeResult.error || notesResult.error);
   const attendeeNames: Record<string, string> = {};
   const attendeeContactIds: Record<string, string> = {};
   for (const a of attendeeRows ?? []) {
@@ -39,11 +46,10 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
     }
   }
 
-  const { data: notes } = await supabase
-    .from("internal_notes").select("payload").eq("meeting_id", id).single();
-
   const isFailed = meeting?.status === "failed";
-  const isDone = meeting?.status === "done";
+  const isDone = ["done", "approved"].includes(meeting.status);
+  const enrichmentPending = isDone && meeting.enrichment_status === "pending";
+  const enrichmentStalled = enrichmentPending && (!meeting.processing_started_at || new Date().getTime() - new Date(meeting.processing_started_at).getTime() > 360_000);
   const isProcessing = ["uploaded", "transcribing", "extracting", "summarizing"].includes(meeting?.status ?? "");
 
   const statusLabel: Record<string, string> = {
@@ -146,8 +152,10 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
   );
 
   return (
-    <main className="max-w-2xl mx-auto px-8 py-10 space-y-6">
-      {isProcessing && <AutoRefresh meetingId={id} status={meeting?.status ?? ""} />}
+    <main className="max-w-5xl mx-auto px-5 sm:px-8 py-8 sm:py-10 space-y-6">
+      {(isProcessing || (enrichmentPending && !enrichmentStalled)) && <AutoRefresh meetingId={id} status={meeting.status} enrichmentStatus={meeting.enrichment_status} />}
+      {resultsUnavailable && <p role="alert" className="rounded-xl border border-warn/20 bg-warn-soft p-4 text-sm">Some meeting details could not load. Refresh to try again.</p>}
+      {enrichmentPending && <p role="status" className="rounded-xl bg-teal-soft p-4 text-sm text-teal">{enrichmentStalled ? "Your summary is ready. Additional insights are taking longer than expected; refresh later or rebuild relationship insights." : "Your summary is ready. Additional relationship and language insights are still being prepared."}</p>}
 
       <div className="flex items-start justify-between">
         <Link href="/dashboard/meetings" className="text-ink-muted hover:text-teal transition flex items-center gap-1.5 text-sm">
@@ -172,17 +180,21 @@ export default async function MeetingDetail({ params }: { params: Promise<{ id: 
             <RetryButton meetingId={id} />
           </div>
           <p className="text-xs text-ink-muted">
-            Automatic retries were already attempted and didn't succeed. Check your Anthropic account has available credit, then retry.
+            {meeting?.processing_error || "Your source material is retained. Retry processing to continue."}
           </p>
         </section>
       )}
 
+      {isDone && meeting?.processing_error && <p role="status" className="rounded-xl border border-warn/20 bg-warn-soft p-4 text-sm text-warn">{meeting.processing_error}</p>}
+      {isProcessing && (!meeting?.processing_started_at || new Date().getTime() - new Date(meeting.processing_started_at).getTime() > (meeting.status === "transcribing" ? 7_200_000 : 360_000)) && (
+        <section className="rounded-xl border border-border p-4 space-y-3"><p className="text-sm text-ink-muted">This is taking longer than expected. You can retry processing.</p><RetryButton meetingId={id} /></section>
+      )}
       {isProcessing && (
         <section className="bg-teal-soft border border-teal/20 rounded-xl p-6">
           <p className="text-sm text-ink">Processing — {statusLabel[meeting?.status ?? ""] ?? "working…"}</p>
           {(meeting?.status === "extracting" || meeting?.status === "summarizing") && (
             <p className="text-xs text-ink-muted mt-1">
-              This page retries automatically in the background — no action needed. Leave it open.
+              Analysis continues on the server. You can leave this page and return later.
             </p>
           )}
         </section>

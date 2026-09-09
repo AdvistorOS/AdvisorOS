@@ -1,6 +1,6 @@
 # AdvisorOS — review build
 
-This update is based on the uploaded AdvisorOS-main.zip, identified by archive commit aaa2ef15d68cb03260d4c2c1ef9546da589801d1. It has not been pushed to GitHub or deployed to Vercel. Apply it to a separate branch and use a staging Supabase project first. The upload did not include your database schema, row-level security policies, or deployment credentials.
+This update is based on the uploaded AdvisorOS-main.zip, identified by archive commit aaa2ef15d68cb03260d4c2c1ef9546da589801d1. This document describes the review branch. Production deployment and hosted database migrations have not been verified. Apply it to a separate branch and use a staging Supabase project first. The upload did not include your database schema, row-level security policies, or deployment credentials.
 
 ## What changed
 
@@ -74,3 +74,8 @@ For rollback, prefer restoring a known secure deployment and leave the additive 
 The meeting detail page now fetches independent result panels in parallel. A small authenticated status endpoint is polled every two seconds while work is pending; the full page refreshes only when a processing stage changes or an attempt becomes stale. Polling pauses while the tab is hidden and reports connection failures. Core results appear before optional enrichment finishes, and polling continues until those additional insights are ready or the attempt times out. Approved meetings retain their analysis panels. Uploaded document transcripts display full text even without speaker-labelled utterances. Mobile tabs sit below the navigation header and scroll horizontally.
 
 Apply the second migration as well as the first before deploying this version. This update improves the delay between saved results and their appearance in the UI; it does not establish a measured reduction in provider inference time. Real-recording latency and visual acceptance checks remain required.
+
+
+## Integration with GitHub main
+
+Compared against main at ff8cd1663212c5d285b2921961c2b06fbd1e4831. Preserves its removal of automatic stage/speaker timelines to reduce output size. Optional historical timelines remain supported. Restores the complete dependency lockfile together with the new test dependencies. The previously uploaded deployment notes alone did not install the app changes.

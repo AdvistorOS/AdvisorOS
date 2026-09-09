@@ -1,3 +1,4 @@
+import { ownedMeeting } from "@/lib/processing/access";
 import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -10,7 +11,10 @@ function stripFences(text: string) {
 }
 
 export async function POST(req: Request) {
-  const { meetingId } = await req.json();
+  const body = await req.json().catch(() => null);
+  const access = await ownedMeeting(body?.meetingId);
+  if (access.error) return access.error;
+  const meetingId = access.meeting.id;
   if (!meetingId) return Response.json({ error: "meetingId required" }, { status: 400 });
 
   const { data: transcriptRow } = await supabaseAdmin

@@ -9,7 +9,10 @@ export async function createClient() {
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
-        setAll: (list) => list.forEach(({ name, value, options }) => cookieStore.set(name, value, options)),
+        setAll: (list) => {
+          try { list.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); }
+          catch { /* Server Components cannot write cookies; proxy refreshes the session. */ }
+        },
       },
     }
   );

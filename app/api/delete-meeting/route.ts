@@ -1,7 +1,11 @@
+import { ownedMeeting } from "@/lib/processing/access";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(req: Request) {
-  const { meetingId } = await req.json();
+  const body = await req.json().catch(() => null);
+  const access = await ownedMeeting(body?.meetingId);
+  if (access.error) return access.error;
+  const meetingId = access.meeting.id;
 
   // Delete child rows first (no cascade set up on these tables)
   await supabaseAdmin.from("transcripts").delete().eq("meeting_id", meetingId);
