@@ -2,8 +2,6 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY!);
-
 function generatePassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
   let pw = "";
@@ -23,6 +21,12 @@ export async function POST(req: Request) {
   const { email, fullName, firmId } = await req.json();
   if (!email) return Response.json({ error: "email required" }, { status: 400 });
 
+  const emailKey = process.env.RESEND_API_KEY;
+  if (!emailKey) {
+    return Response.json({ error: "Invitation email is not configured. Add RESEND_API_KEY in Vercel before creating an adviser." }, { status: 503 });
+  }
+  const resend = new Resend(emailKey);
+
   const password = generatePassword();
 
   const { data: authUser, error: authErr } = await supabaseAdmin.auth.admin.createUser({
@@ -40,15 +44,19 @@ export async function POST(req: Request) {
   let emailSent = true;
   let emailError = "";
   try {
-    await resend.emails.send({
+    const { error } = await resend.emails.send({
       from: "onboarding@resend.dev",
       to: email,
       subject: "Your AdvisorOS login",
       text: "Login: https://advisor-os-fawn.vercel.app\nEmail: " + email + "\nPassword: " + password,
     });
-  } catch (e: any) {
+    if (error) {
+      emailSent = false;
+      emailError = error.message;
+    }
+  } catch (e: unknown) {
     emailSent = false;
-    emailError = e.message;
+    emailError = e instanceof Error ? e.message : "Invitation email could not be sent.";
   }
 
   return Response.json({ email, password, emailSent, emailError });

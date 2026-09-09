@@ -89,3 +89,7 @@ Inspection also found row-level security disabled on `transcripts` and `super_ad
 When installing on another database, apply all three migrations in filename order after schema verification. On this connected project, use migration history to avoid reapplying the policy migration.
 
 Code is on `codex/advisoros-polish-processing`, pull request #1. Both linked Vercel projects initially reported failed preview deployments; build logs and runtime configuration remain to be checked. No production merge, provider key rotation, authenticated preview test or live latency benchmark has been completed.
+
+## Missing Resend key build fix
+
+The supplied Vercel log identified module-level Resend construction in `/api/admin/create-adviser` as the build failure. Resend is now instantiated only during an authenticated, authorised invitation request. Missing `RESEND_API_KEY` returns HTTP 503 before creating an account; provider-returned send errors are reported accurately. Add a valid Resend key to the relevant Vercel environment to enable invitations. This email configuration no longer blocks deployment of meeting features.
