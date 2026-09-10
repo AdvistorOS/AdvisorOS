@@ -93,3 +93,11 @@ Code is on `codex/advisoros-polish-processing`, pull request #1. Both linked Ver
 ## Missing Resend key build fix
 
 The supplied Vercel log identified module-level Resend construction in `/api/admin/create-adviser` as the build failure. Resend is now instantiated only during an authenticated, authorised invitation request. Missing `RESEND_API_KEY` returns HTTP 503 before creating an account; provider-returned send errors are reported accurately. Add a valid Resend key to the relevant Vercel environment to enable invitations. This email configuration no longer blocks deployment of meeting features.
+
+## Client questions and setup visibility
+
+Client Q&A now retrieves recent completed summaries, current facts and intelligence in parallel with bounded row and context sizes. It no longer loads every historical transcript for every question. Answers disclose that their context is limited, distinguish client records from meeting evidence, and link meeting citations using authorised database IDs. Out-of-range meeting citations and truncated output fail cleanly. Links establish which records were cited; they do not independently verify every generated claim.
+
+The question UI includes useful starter questions, mobile-friendly controls, clear loading/error states and retries. The browser request has a 55-second deadline; database queries have a 10-second deadline and the AI request has a 40-second timeout without automatic retries. These limits reduce runaway waits; live provider latency has not been benchmarked.
+
+The dashboard warns when recording configuration is incomplete, using the same checks as audio intake. This checks presence/format, not provider account validity or webhook reachability. Vercel team access still returns 403; environment configuration and an authenticated live recording test remain required before declaring launch readiness.
